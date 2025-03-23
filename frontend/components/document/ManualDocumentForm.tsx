@@ -29,25 +29,25 @@ const ManualDocumentForm = ({ onSuccess, onCancel, documentToEdit }: ManualDocum
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!title.trim()) {
       setError('Title is required');
       return;
     }
-    
+
     if (!content.trim()) {
       setError('Content is required');
       return;
     }
-    
+
     setIsSubmitting(true);
     setError(null);
-    
+
     try {
       if (isEditing && documentToEdit) {
         // Update existing document
         const { document, error } = await updateDocumentContent(documentToEdit.id, title, content);
-        
+
         if (error) {
           setError(error);
         } else {
@@ -58,7 +58,7 @@ const ManualDocumentForm = ({ onSuccess, onCancel, documentToEdit }: ManualDocum
       } else {
         // Create new document
         const { document, error } = await createManualDocument(title, content);
-        
+
         if (error) {
           setError(error);
         } else {
@@ -80,7 +80,10 @@ const ManualDocumentForm = ({ onSuccess, onCancel, documentToEdit }: ManualDocum
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        <label
+          htmlFor="title"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        >
           Document Title
         </label>
         <Input
@@ -92,9 +95,12 @@ const ManualDocumentForm = ({ onSuccess, onCancel, documentToEdit }: ManualDocum
           required
         />
       </div>
-      
+
       <div>
-        <label htmlFor="content" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        <label
+          htmlFor="content"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        >
           Document Content
         </label>
         <textarea
@@ -106,32 +112,27 @@ const ManualDocumentForm = ({ onSuccess, onCancel, documentToEdit }: ManualDocum
           required
         />
       </div>
-      
+
       {error && (
         <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800">
           {error}
         </div>
       )}
-      
+
       <div className="flex justify-end space-x-2">
         {onCancel && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         )}
-        <Button
-          type="submit"
-          variant="default"
-          isLoading={isSubmitting}
-        >
+        <Button type="submit" variant="default" isLoading={isSubmitting}>
           {isSubmitting
-            ? (isEditing ? 'Saving...' : 'Creating...')
-            : (isEditing ? 'Save Changes' : 'Create Document')}
+            ? isEditing
+              ? 'Saving...'
+              : 'Creating...'
+            : isEditing
+              ? 'Save Changes'
+              : 'Create Document'}
         </Button>
       </div>
     </form>

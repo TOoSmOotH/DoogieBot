@@ -16,7 +16,7 @@ import {
   deleteDocument,
   processDocument,
   deleteAllDocumentsAndResetRAG,
-  batchProcessDocuments
+  batchProcessDocuments,
 } from '@/services/document';
 
 type DocumentTab = 'upload' | 'manual' | 'github' | 'zip';
@@ -27,7 +27,11 @@ const DocumentManagement = () => {
   const [error, setError] = useState<string | null>(null);
   const [showDocumentDialog, setShowDocumentDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [documentToEdit, setDocumentToEdit] = useState<{id: string; title: string; content: string} | null>(null);
+  const [documentToEdit, setDocumentToEdit] = useState<{
+    id: string;
+    title: string;
+    content: string;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<DocumentTab>('upload');
   const [uploadTitle, setUploadTitle] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -43,7 +47,7 @@ const DocumentManagement = () => {
     page: 1,
     size: 10,
     total: 0,
-    pages: 1
+    pages: 1,
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
@@ -54,7 +58,7 @@ const DocumentManagement = () => {
   useEffect(() => {
     loadDocuments();
   }, [pagination.page, pagination.size, filterType]);
-  
+
   // Filter documents client-side based on search term
   useEffect(() => {
     if (!searchTerm.trim()) {
@@ -63,9 +67,10 @@ const DocumentManagement = () => {
     } else {
       // Filter documents by title (case-insensitive)
       const term = searchTerm.toLowerCase();
-      const filtered = documents.filter(doc =>
-        doc.title.toLowerCase().includes(term) ||
-        (doc.type && doc.type.toLowerCase().includes(term))
+      const filtered = documents.filter(
+        (doc) =>
+          doc.title.toLowerCase().includes(term) ||
+          (doc.type && doc.type.toLowerCase().includes(term))
       );
       setFilteredDocuments(filtered);
     }
@@ -77,15 +82,15 @@ const DocumentManagement = () => {
     try {
       const params: PaginationParams = {
         page: pagination.page,
-        size: pagination.size
+        size: pagination.size,
       };
-      
+
       // We'll do client-side filtering for search
-      
+
       if (filterType && filterType !== 'all') {
         params.doc_type = filterType;
       }
-      
+
       const { documents, error } = await getDocuments(params);
       if (error) {
         setError(error);
@@ -95,7 +100,7 @@ const DocumentManagement = () => {
           page: documents.page,
           size: documents.size,
           total: documents.total,
-          pages: documents.pages
+          pages: documents.pages,
         });
       } else {
         setDocuments([]);
@@ -111,15 +116,19 @@ const DocumentManagement = () => {
 
   const handlePageChange = (newPage: number) => {
     if (newPage > 0 && newPage <= pagination.pages) {
-      setPagination(prev => ({
+      setPagination((prev) => ({
         ...prev,
-        page: newPage
+        page: newPage,
       }));
     }
   };
 
   const handleResetRAG = async () => {
-    if (confirm('Are you sure you want to delete ALL documents and reset the RAG system? This action cannot be undone.')) {
+    if (
+      confirm(
+        'Are you sure you want to delete ALL documents and reset the RAG system? This action cannot be undone.'
+      )
+    ) {
       setIsResettingRAG(true);
       setError(null);
       try {
@@ -141,7 +150,11 @@ const DocumentManagement = () => {
   };
 
   const handleProcessAllDocuments = async () => {
-    if (confirm('Are you sure you want to process all documents? This may take some time for large document collections.')) {
+    if (
+      confirm(
+        'Are you sure you want to process all documents? This may take some time for large document collections.'
+      )
+    ) {
       setIsProcessingAll(true);
       setError(null);
       try {
@@ -150,22 +163,24 @@ const DocumentManagement = () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
           body: JSON.stringify({
             force_embeddings: true,
             // Explicitly set chunking parameters to ensure documents are properly chunked
             chunk_size: 1000,
-            chunk_overlap: 200
-          })
+            chunk_overlap: 200,
+          }),
         });
-        
+
         const result = await response.json();
-        
+
         if (!response.ok) {
           setError(result.detail || 'Failed to process all documents');
         } else {
-          alert(`Processing started for ${result.document_count} documents. This will continue in the background.`);
+          alert(
+            `Processing started for ${result.document_count} documents. This will continue in the background.`
+          );
           // After a short delay, reload the documents to show updated status
           setTimeout(() => {
             loadDocuments();
@@ -181,9 +196,9 @@ const DocumentManagement = () => {
   };
 
   const handleToggleSelectDocument = (documentId: string) => {
-    setSelectedDocuments(prev => {
+    setSelectedDocuments((prev) => {
       if (prev.includes(documentId)) {
-        return prev.filter(id => id !== documentId);
+        return prev.filter((id) => id !== documentId);
       } else {
         return [...prev, documentId];
       }
@@ -192,19 +207,19 @@ const DocumentManagement = () => {
 
   const handleSelectAll = () => {
     const visibleDocuments = filteredDocuments;
-    const allSelected = visibleDocuments.every(doc => selectedDocuments.includes(doc.id));
-    
+    const allSelected = visibleDocuments.every((doc) => selectedDocuments.includes(doc.id));
+
     if (allSelected) {
       // If all visible documents are selected, deselect them
-      setSelectedDocuments(prev =>
-        prev.filter(id => !visibleDocuments.some(doc => doc.id === id))
+      setSelectedDocuments((prev) =>
+        prev.filter((id) => !visibleDocuments.some((doc) => doc.id === id))
       );
     } else {
       // Otherwise, select all visible documents
-      const visibleIds = visibleDocuments.map(doc => doc.id);
-      setSelectedDocuments(prev => {
+      const visibleIds = visibleDocuments.map((doc) => doc.id);
+      setSelectedDocuments((prev) => {
         const newSelection = [...prev];
-        visibleIds.forEach(id => {
+        visibleIds.forEach((id) => {
           if (!newSelection.includes(id)) {
             newSelection.push(id);
           }
@@ -213,28 +228,28 @@ const DocumentManagement = () => {
       });
     }
   };
-  
+
   const handlePageSizeChange = (newSize: number) => {
-    setPagination(prev => ({
+    setPagination((prev) => ({
       ...prev,
       page: 1, // Reset to first page when changing page size
-      size: newSize
+      size: newSize,
     }));
   };
-  
+
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    setPagination(prev => ({
+    setPagination((prev) => ({
       ...prev,
-      page: 1 // Reset to first page when changing search term
+      page: 1, // Reset to first page when changing search term
     }));
   };
-  
+
   const handleFilterTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setFilterType(e.target.value);
-    setPagination(prev => ({
+    setPagination((prev) => ({
       ...prev,
-      page: 1 // Reset to first page when changing filter type
+      page: 1, // Reset to first page when changing filter type
     }));
   };
 
@@ -244,7 +259,9 @@ const DocumentManagement = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to process ${selectedDocuments.length} selected document(s)?`)) {
+    if (
+      confirm(`Are you sure you want to process ${selectedDocuments.length} selected document(s)?`)
+    ) {
       setIsProcessingSelected(true);
       setError(null);
       try {
@@ -252,7 +269,9 @@ const DocumentManagement = () => {
         if (error) {
           setError(error);
         } else if (result) {
-          alert(`Processing started for ${selectedDocuments.length} document(s). This will continue in the background.`);
+          alert(
+            `Processing started for ${selectedDocuments.length} document(s). This will continue in the background.`
+          );
           // After a short delay, reload the documents to show updated status
           setTimeout(() => {
             loadDocuments();
@@ -273,7 +292,11 @@ const DocumentManagement = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to delete ${selectedDocuments.length} selected document(s)? This action cannot be undone.`)) {
+    if (
+      confirm(
+        `Are you sure you want to delete ${selectedDocuments.length} selected document(s)? This action cannot be undone.`
+      )
+    ) {
       setIsDeletingSelected(true);
       setError(null);
       try {
@@ -373,14 +396,14 @@ const DocumentManagement = () => {
         setError(error);
         return;
       }
-      
+
       if (document) {
         // Only allow editing manual documents
         if (document.type === 'manual') {
           setDocumentToEdit({
             id: document.id,
             title: document.title,
-            content: document.content || ''
+            content: document.content || '',
           });
           setShowEditDialog(true);
         } else {
@@ -459,18 +482,21 @@ const DocumentManagement = () => {
             </Button>
           </div>
         </div>
-        
+
         {error && (
           <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800">
             {error}
           </div>
         )}
-        
+
         {/* Filter and pagination controls */}
         <div className="flex flex-col md:flex-row gap-4 mb-4">
           <div className="flex-1 flex flex-col sm:flex-row gap-2">
             <div className="flex-1">
-              <label htmlFor="filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="filter"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Search Documents
               </label>
               <Input
@@ -483,7 +509,10 @@ const DocumentManagement = () => {
               />
             </div>
             <div className="w-full sm:w-40">
-              <label htmlFor="filterType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="filterType"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Document Type
               </label>
               <select
@@ -505,7 +534,10 @@ const DocumentManagement = () => {
               </select>
             </div>
             <div className="w-full sm:w-40">
-              <label htmlFor="pageSize" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="pageSize"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Items Per Page
               </label>
               <select
@@ -523,7 +555,7 @@ const DocumentManagement = () => {
             </div>
           </div>
         </div>
-        
+
         {/* Batch action buttons */}
         {documents && documents.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
@@ -533,7 +565,8 @@ const DocumentManagement = () => {
               className="text-sm"
               disabled={isLoading}
             >
-              {filteredDocuments.length > 0 && filteredDocuments.every(doc => selectedDocuments.includes(doc.id))
+              {filteredDocuments.length > 0 &&
+              filteredDocuments.every((doc) => selectedDocuments.includes(doc.id))
                 ? 'Deselect All'
                 : 'Select All'}
             </Button>
@@ -562,7 +595,7 @@ const DocumentManagement = () => {
             </div>
           </div>
         )}
-        
+
         {isLoading ? (
           <div className="text-center py-8">Loading...</div>
         ) : documents && documents.length > 0 ? (
@@ -582,7 +615,10 @@ const DocumentManagement = () => {
                 </thead>
                 <tbody>
                   {filteredDocuments.map((doc) => (
-                    <tr key={doc.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <tr
+                      key={doc.id}
+                      className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
                       <td className="p-3">
                         <input
                           type="checkbox"
@@ -594,7 +630,10 @@ const DocumentManagement = () => {
                       <td className="p-3">
                         <div className="flex items-center">
                           <span className="text-xl mr-2">{getFileTypeIcon(doc.type)}</span>
-                          <span className="font-medium text-gray-900 dark:text-white" title={doc.title}>
+                          <span
+                            className="font-medium text-gray-900 dark:text-white"
+                            title={doc.title}
+                          >
                             {doc.title}
                           </span>
                         </div>
@@ -615,7 +654,7 @@ const DocumentManagement = () => {
                           >
                             {processingDocumentId === doc.id ? 'Processing...' : 'Process'}
                           </Button>
-                          
+
                           {doc.type === 'manual' && (
                             <Button
                               variant="outline"
@@ -626,7 +665,7 @@ const DocumentManagement = () => {
                               Edit
                             </Button>
                           )}
-                          
+
                           <Button
                             variant="outline"
                             size="sm"
@@ -642,7 +681,7 @@ const DocumentManagement = () => {
                 </tbody>
               </table>
             </div>
-            
+
             {/* Pagination Controls */}
             {pagination.pages > 1 && (
               <div className="flex justify-center mt-6">
@@ -655,56 +694,59 @@ const DocumentManagement = () => {
                   >
                     Previous
                   </Button>
-                  
+
                   <div className="flex items-center space-x-1 overflow-x-auto max-w-md">
                     {(() => {
                       // Logic to show limited page numbers with ellipses
                       const visiblePageNumbers = [];
                       const totalPages = pagination.pages;
                       const currentPage = pagination.page;
-                      
+
                       // Always show first page
                       visiblePageNumbers.push(1);
-                      
+
                       // Calculate range of pages to show around current page
                       const delta = 2; // Number of pages to show on each side of current page
                       const leftBound = Math.max(2, currentPage - delta);
                       const rightBound = Math.min(totalPages - 1, currentPage + delta);
-                      
+
                       // Add ellipsis after first page if needed
                       if (leftBound > 2) {
                         visiblePageNumbers.push('ellipsis-left');
                       }
-                      
+
                       // Add pages around current page
                       for (let i = leftBound; i <= rightBound; i++) {
                         visiblePageNumbers.push(i);
                       }
-                      
+
                       // Add ellipsis before last page if needed
                       if (rightBound < totalPages - 1) {
                         visiblePageNumbers.push('ellipsis-right');
                       }
-                      
+
                       // Always show last page if there is more than one page
                       if (totalPages > 1) {
                         visiblePageNumbers.push(totalPages);
                       }
-                      
+
                       // Render the page buttons
                       return visiblePageNumbers.map((page, index) => {
                         if (page === 'ellipsis-left' || page === 'ellipsis-right') {
                           return (
-                            <span key={page} className="w-8 h-8 flex items-center justify-center text-gray-500">
+                            <span
+                              key={page}
+                              className="w-8 h-8 flex items-center justify-center text-gray-500"
+                            >
                               ...
                             </span>
                           );
                         }
-                        
+
                         return (
                           <Button
                             key={`page-${page}`}
-                            variant={page === currentPage ? "default" : "outline"}
+                            variant={page === currentPage ? 'default' : 'outline'}
                             size="sm"
                             onClick={() => handlePageChange(page as number)}
                             disabled={isLoading}
@@ -716,7 +758,7 @@ const DocumentManagement = () => {
                       });
                     })()}
                   </div>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -728,22 +770,23 @@ const DocumentManagement = () => {
                 </nav>
               </div>
             )}
-            
+
             <div className="text-center text-sm text-gray-500 mt-2">
-              {searchTerm ?
-                `Showing ${filteredDocuments.length} of ${documents.length} documents (filtered from ${pagination.total} total)` :
-                `Showing ${documents.length} of ${pagination.total} documents`
-              }
+              {searchTerm
+                ? `Showing ${filteredDocuments.length} of ${documents.length} documents (filtered from ${pagination.total} total)`
+                : `Showing ${documents.length} of ${pagination.total} documents`}
             </div>
           </>
         ) : (
           <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <p className="text-gray-600 dark:text-gray-400">No documents available</p>
-            <p className="text-sm mt-2">Upload documents or add manual content to use in the RAG system</p>
+            <p className="text-sm mt-2">
+              Upload documents or add manual content to use in the RAG system
+            </p>
           </div>
         )}
       </div>
-      
+
       {/* Add Document Dialog */}
       <Dialog
         isOpen={showDocumentDialog}
@@ -757,16 +800,20 @@ const DocumentManagement = () => {
             {renderTabButton('manual', 'Manual Entry')}
             {renderTabButton('github', 'GitHub')}
           </div>
-          
+
           {activeTab === 'upload' ? (
             <div className="space-y-4 pt-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Upload a document to be processed for the RAG system. Supported formats: PDF, DOCX, Markdown, TXT, JSON, JSONL, YAML, YML.
+                Upload a document to be processed for the RAG system. Supported formats: PDF, DOCX,
+                Markdown, TXT, JSON, JSONL, YAML, YML.
               </p>
-              
+
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="title"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     Document Title (optional)
                   </label>
                   <Input
@@ -776,11 +823,16 @@ const DocumentManagement = () => {
                     value={uploadTitle}
                     onChange={(e) => setUploadTitle(e.target.value)}
                   />
-                  <p className="text-xs text-gray-500 mt-1">If not provided, the filename will be used</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    If not provided, the filename will be used
+                  </p>
                 </div>
-                
+
                 <div>
-                  <label htmlFor="file" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="file"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     Document File
                   </label>
                   <input
@@ -792,13 +844,13 @@ const DocumentManagement = () => {
                   />
                 </div>
               </div>
-              
+
               {uploadError && (
                 <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800">
                   {uploadError}
                 </div>
               )}
-              
+
               <div className="flex justify-end space-x-2 mt-4">
                 <Button
                   variant="outline"
@@ -807,11 +859,7 @@ const DocumentManagement = () => {
                 >
                   Cancel
                 </Button>
-                <Button
-                  variant="default"
-                  onClick={handleUpload}
-                  isLoading={isUploading}
-                >
+                <Button variant="default" onClick={handleUpload} isLoading={isUploading}>
                   {isUploading ? 'Uploading...' : 'Upload'}
                 </Button>
               </div>
@@ -870,4 +918,4 @@ const DocumentManagement = () => {
   );
 };
 
-export default withAdmin(DocumentManagement, "Document Management");
+export default withAdmin(DocumentManagement, 'Document Management');

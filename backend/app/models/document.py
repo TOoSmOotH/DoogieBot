@@ -1,7 +1,10 @@
-from sqlalchemy import Column, String, DateTime, Text, Integer, JSON, ForeignKey
-from sqlalchemy.sql import func
 import enum
+
 from app.db.base import Base
+from sqlalchemy import (JSON, Column, DateTime, ForeignKey, Integer, String,
+                        Text)
+from sqlalchemy.sql import func
+
 
 class DocumentType(str, enum.Enum):
     PDF = "pdf"
@@ -15,6 +18,7 @@ class DocumentType(str, enum.Enum):
     YML = "yml"
     MANUAL = "manual"
 
+
 class Document(Base):
     __tablename__ = "documents"
 
@@ -24,12 +28,20 @@ class Document(Base):
     type = Column(String, nullable=False)
     content = Column(Text, nullable=True)  # Original content or path to file
     meta_data = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     uploaded_by = Column(String, ForeignKey("users.id"), nullable=False)
-    
+
     def __repr__(self):
         return f"<Document {self.id}>"
+
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
@@ -40,10 +52,13 @@ class DocumentChunk(Base):
     meta_data = Column(JSON, nullable=True)
     chunk_index = Column(Integer, nullable=False)
     embedding = Column(JSON, nullable=True)  # Store as JSON for SQLite compatibility
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
     def __repr__(self):
         return f"<DocumentChunk {self.id}>"
+
 
 class GraphNode(Base):
     __tablename__ = "graph_nodes"
@@ -53,10 +68,13 @@ class GraphNode(Base):
     node_type = Column(String, nullable=False)  # entity, concept, etc.
     content = Column(Text, nullable=False)
     meta_data = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
     def __repr__(self):
         return f"<GraphNode {self.id}>"
+
 
 class GraphEdge(Base):
     __tablename__ = "graph_edges"
@@ -67,7 +85,9 @@ class GraphEdge(Base):
     relation_type = Column(String, nullable=False)
     weight = Column(Integer, nullable=True)
     meta_data = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
     def __repr__(self):
         return f"<GraphEdge {self.id}>"

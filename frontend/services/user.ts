@@ -2,7 +2,9 @@ import { PaginatedResponse, PaginationParams, User, UserCreate, UserUpdate } fro
 import { del, get, getPaginated, post, put } from './api';
 
 // Get all users with pagination (admin only)
-export const getUsers = async (params?: PaginationParams): Promise<{
+export const getUsers = async (
+  params?: PaginationParams
+): Promise<{
   users?: PaginatedResponse<User>;
   error?: string;
 }> => {
@@ -16,7 +18,9 @@ export const getUsers = async (params?: PaginationParams): Promise<{
 };
 
 // Get pending users (admin only)
-export const getPendingUsers = async (params?: PaginationParams): Promise<{
+export const getPendingUsers = async (
+  params?: PaginationParams
+): Promise<{
   users?: PaginatedResponse<User>;
   error?: string;
 }> => {
@@ -41,7 +45,9 @@ export const getUser = async (userId: string): Promise<{ user?: User; error?: st
 };
 
 // Create a new user (admin only)
-export const createUser = async (userData: UserCreate): Promise<{ user?: User; error?: string }> => {
+export const createUser = async (
+  userData: UserCreate
+): Promise<{ user?: User; error?: string }> => {
   const response = await post<User>('/users', userData);
 
   if (response.error) {
@@ -52,7 +58,10 @@ export const createUser = async (userData: UserCreate): Promise<{ user?: User; e
 };
 
 // Update a user (admin only or self)
-export const updateUser = async (userId: string, userData: UserUpdate): Promise<{ success?: boolean; error?: string }> => {
+export const updateUser = async (
+  userId: string,
+  userData: UserUpdate
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await put(`/users/${userId}`, userData);
 
   if (response.error) {
@@ -63,7 +72,9 @@ export const updateUser = async (userId: string, userData: UserUpdate): Promise<
 };
 
 // Delete a user (admin only)
-export const deleteUser = async (userId: string): Promise<{ success?: boolean; error?: string }> => {
+export const deleteUser = async (
+  userId: string
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await del(`/users/${userId}`);
 
   if (response.error) {
@@ -74,7 +85,10 @@ export const deleteUser = async (userId: string): Promise<{ success?: boolean; e
 };
 
 // Approve a pending user (admin only)
-export const approveUser = async (userId: string, isAdmin: boolean = false): Promise<{ success?: boolean; error?: string }> => {
+export const approveUser = async (
+  userId: string,
+  isAdmin: boolean = false
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await put(`/users/${userId}/approve`, { role: isAdmin ? 'admin' : 'user' });
 
   if (response.error) {
@@ -102,7 +116,9 @@ export const updatePassword = async (
 };
 
 // Delete current user's account
-export const deleteAccount = async (password: string): Promise<{ success?: boolean; error?: string }> => {
+export const deleteAccount = async (
+  password: string
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await post('/users/me/delete', { password });
 
   if (response.error) {

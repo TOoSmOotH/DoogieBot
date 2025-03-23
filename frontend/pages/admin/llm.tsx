@@ -10,7 +10,7 @@ import {
   updateLLMConfig,
   activateLLMConfig,
   deleteLLMConfig,
-  getProviderModels
+  getProviderModels,
 } from '@/services/llm';
 import { LLMConfig } from '@/types';
 
@@ -59,7 +59,7 @@ const LLMConfiguration = () => {
       if (providersResponse.error) {
         throw new Error(providersResponse.error);
       }
-      
+
       const providersData = providersResponse.providers || {};
       setProviders(providersData);
 
@@ -68,32 +68,35 @@ const LLMConfiguration = () => {
       if (configsResponse.error) {
         throw new Error(configsResponse.error);
       }
-      
+
       const configsData = configsResponse.configs || [];
       setConfigs(configsData);
 
       // Initialize provider configs
-      const initialProviderConfigs = Object.entries(providersData).map(([id, info]: [string, any]) => {
-        const existingConfig = configsData.find(c => c.provider === id);
-        return {
-          id,
-          config: existingConfig || null,
-          enabled: existingConfig?.is_active || false,
-          api_key: existingConfig?.api_key || '',
-          base_url: existingConfig?.base_url || '',
-          model: existingConfig?.model || info.default_model || '',
-          embedding_model: existingConfig?.embedding_model || '',
-          system_prompt: existingConfig?.system_prompt || 'You are Doogie, a helpful AI assistant.',
-          available_models: [],
-          embedding_models: [],
-          isPolling: false
-        };
-      });
+      const initialProviderConfigs = Object.entries(providersData).map(
+        ([id, info]: [string, any]) => {
+          const existingConfig = configsData.find((c) => c.provider === id);
+          return {
+            id,
+            config: existingConfig || null,
+            enabled: existingConfig?.is_active || false,
+            api_key: existingConfig?.api_key || '',
+            base_url: existingConfig?.base_url || '',
+            model: existingConfig?.model || info.default_model || '',
+            embedding_model: existingConfig?.embedding_model || '',
+            system_prompt:
+              existingConfig?.system_prompt || 'You are Doogie, a helpful AI assistant.',
+            available_models: [],
+            embedding_models: [],
+            isPolling: false,
+          };
+        }
+      );
 
       setProviderConfigs(initialProviderConfigs);
-      
+
       // Update systemPrompt state with the active configuration's system prompt
-      const activeConfig = configsData.find(c => c.is_active);
+      const activeConfig = configsData.find((c) => c.is_active);
       if (activeConfig && activeConfig.system_prompt) {
         setSystemPrompt(activeConfig.system_prompt);
       }
@@ -112,7 +115,7 @@ const LLMConfiguration = () => {
   // Function to toggle a provider's enabled state
   const toggleProvider = async (providerId: string) => {
     // Find the provider config
-    const providerConfig = providerConfigs.find(pc => pc.id === providerId);
+    const providerConfig = providerConfigs.find((pc) => pc.id === providerId);
     if (!providerConfig) return;
 
     try {
@@ -132,14 +135,14 @@ const LLMConfiguration = () => {
             embedding_model: providerConfig.embedding_model,
             system_prompt: systemPrompt, // Use the current system prompt value
             api_key: providerConfig.api_key,
-            base_url: providerConfig.base_url
+            base_url: providerConfig.base_url,
           };
-          
+
           const response = await createLLMConfig(newConfig);
           if (response.error) {
             throw new Error(response.error);
           }
-          
+
           // Activate the new config
           if (response.config) {
             await activateLLMConfig(response.config.id);
@@ -147,12 +150,12 @@ const LLMConfiguration = () => {
         }
       } else {
         // If disabling and another provider is available, activate that one
-        const otherProvider = providerConfigs.find(pc => pc.id !== providerId && pc.config);
+        const otherProvider = providerConfigs.find((pc) => pc.id !== providerId && pc.config);
         if (otherProvider && otherProvider.config) {
           await activateLLMConfig(otherProvider.config.id);
         }
       }
-      
+
       // Reload data to reflect changes
       await loadData();
     } catch (err) {
@@ -164,47 +167,39 @@ const LLMConfiguration = () => {
   // Function to update API key (local state only)
   const updateApiKey = (providerId: string, apiKey: string) => {
     // Update local state only
-    setProviderConfigs(prevConfigs =>
-      prevConfigs.map(pc =>
-        pc.id === providerId ? { ...pc, api_key: apiKey } : pc
-      )
+    setProviderConfigs((prevConfigs) =>
+      prevConfigs.map((pc) => (pc.id === providerId ? { ...pc, api_key: apiKey } : pc))
     );
   };
 
   // Function to update base URL (local state only)
   const updateBaseUrl = (providerId: string, baseUrl: string) => {
     // Update local state only
-    setProviderConfigs(prevConfigs =>
-      prevConfigs.map(pc =>
-        pc.id === providerId ? { ...pc, base_url: baseUrl } : pc
-      )
+    setProviderConfigs((prevConfigs) =>
+      prevConfigs.map((pc) => (pc.id === providerId ? { ...pc, base_url: baseUrl } : pc))
     );
   };
 
   // Function to update model (local state only)
   const updateModel = (providerId: string, model: string) => {
     // Update local state only
-    setProviderConfigs(prevConfigs =>
-      prevConfigs.map(pc =>
-        pc.id === providerId ? { ...pc, model } : pc
-      )
+    setProviderConfigs((prevConfigs) =>
+      prevConfigs.map((pc) => (pc.id === providerId ? { ...pc, model } : pc))
     );
   };
 
   // Function to update embedding model (local state only)
   const updateEmbeddingModel = (providerId: string, embedding_model: string) => {
     // Update local state only
-    setProviderConfigs(prevConfigs =>
-      prevConfigs.map(pc =>
-        pc.id === providerId ? { ...pc, embedding_model } : pc
-      )
+    setProviderConfigs((prevConfigs) =>
+      prevConfigs.map((pc) => (pc.id === providerId ? { ...pc, embedding_model } : pc))
     );
   };
 
   // Function to save provider configuration
   const saveProviderConfig = async (providerId: string) => {
     // Find the provider config
-    const providerConfig = providerConfigs.find(pc => pc.id === providerId);
+    const providerConfig = providerConfigs.find((pc) => pc.id === providerId);
     if (!providerConfig) return;
 
     try {
@@ -215,22 +210,22 @@ const LLMConfiguration = () => {
           api_key: providerConfig.api_key,
           base_url: providerConfig.base_url,
           model: providerConfig.model,
-          embedding_model: providerConfig.embedding_model
+          embedding_model: providerConfig.embedding_model,
         });
-        
+
         if (response.error) {
           throw new Error(response.error);
         }
 
         // Then activate the config to make it take effect immediately
         await activateLLMConfig(providerConfig.config.id);
-        
+
         setError(null);
         // Reload data to reflect changes
         await loadData();
         // Show success message after data is reloaded
-        alert("Configuration saved successfully!");
-    } else {
+        alert('Configuration saved successfully!');
+      } else {
         // Create new config
         const newConfig = {
           provider: providerId,
@@ -238,26 +233,26 @@ const LLMConfiguration = () => {
           embedding_model: providerConfig.embedding_model,
           system_prompt: systemPrompt, // Use the current system prompt value
           api_key: providerConfig.api_key,
-          base_url: providerConfig.base_url
+          base_url: providerConfig.base_url,
         };
-        
+
         // First create the new config
         const response = await createLLMConfig(newConfig);
         if (response.error) {
           throw new Error(response.error);
         }
-        
+
         if (response.config) {
           // Then activate the new config
           await activateLLMConfig(response.config.id);
         }
-        
+
         setError(null);
         // Reload data to reflect changes
         await loadData();
         // Show success message after data is reloaded
-        alert("Configuration created successfully!");
-    }
+        alert('Configuration created successfully!');
+      }
     } catch (err) {
       console.error('Failed to save configuration:', err);
       setError(err instanceof Error ? err.message : 'Failed to save configuration');
@@ -267,21 +262,23 @@ const LLMConfiguration = () => {
   // Function to update system prompt
   const updateSystemPrompt = async () => {
     // Find the active provider config
-    const activeProviderConfig = providerConfigs.find(pc => pc.enabled);
+    const activeProviderConfig = providerConfigs.find((pc) => pc.enabled);
     if (!activeProviderConfig || !activeProviderConfig.config) return;
 
     try {
       // Update the config
-      const response = await updateLLMConfig(activeProviderConfig.config.id, { system_prompt: systemPrompt });
+      const response = await updateLLMConfig(activeProviderConfig.config.id, {
+        system_prompt: systemPrompt,
+      });
       if (response.error) {
         throw new Error(response.error);
       }
-      
+
       setError(null);
       // Reload data to reflect changes
       await loadData();
       // Show success message after data is reloaded
-      alert("System prompt updated successfully!");
+      alert('System prompt updated successfully!');
     } catch (err) {
       console.error('Failed to update system prompt:', err);
       setError(err instanceof Error ? err.message : 'Failed to update system prompt');
@@ -291,14 +288,12 @@ const LLMConfiguration = () => {
   // Function to poll for available models
   const pollAvailableModels = async (providerId: string) => {
     // Find the provider config
-    const providerConfig = providerConfigs.find(pc => pc.id === providerId);
+    const providerConfig = providerConfigs.find((pc) => pc.id === providerId);
     if (!providerConfig) return;
 
     // Set polling state
-    setProviderConfigs(prevConfigs =>
-      prevConfigs.map(pc =>
-        pc.id === providerId ? { ...pc, isPolling: true } : pc
-      )
+    setProviderConfigs((prevConfigs) =>
+      prevConfigs.map((pc) => (pc.id === providerId ? { ...pc, isPolling: true } : pc))
     );
 
     try {
@@ -308,31 +303,31 @@ const LLMConfiguration = () => {
         providerConfig.api_key,
         providerConfig.base_url
       );
-      
+
       if (response.error) {
         throw new Error(response.error);
       }
-      
+
       // Update provider config with available models
-      setProviderConfigs(prevConfigs =>
-        prevConfigs.map(pc =>
-          pc.id === providerId ? {
-            ...pc,
-            available_models: response.chatModels || [],
-            embedding_models: response.embeddingModels || [],
-            isPolling: false
-          } : pc
+      setProviderConfigs((prevConfigs) =>
+        prevConfigs.map((pc) =>
+          pc.id === providerId
+            ? {
+                ...pc,
+                available_models: response.chatModels || [],
+                embedding_models: response.embeddingModels || [],
+                isPolling: false,
+              }
+            : pc
         )
       );
     } catch (err) {
       console.error('Failed to poll available models:', err);
       setError(err instanceof Error ? err.message : 'Failed to poll available models');
-      
+
       // Reset polling state
-      setProviderConfigs(prevConfigs =>
-        prevConfigs.map(pc =>
-          pc.id === providerId ? { ...pc, isPolling: false } : pc
-        )
+      setProviderConfigs((prevConfigs) =>
+        prevConfigs.map((pc) => (pc.id === providerId ? { ...pc, isPolling: false } : pc))
       );
     }
   };
@@ -343,13 +338,13 @@ const LLMConfiguration = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">LLM Configuration</h1>
         </div>
-        
+
         {error && (
           <div className="p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 rounded-md">
             {error}
           </div>
         )}
-        
+
         {loading ? (
           <div className="text-center py-8">Loading...</div>
         ) : (
@@ -372,11 +367,11 @@ const LLMConfiguration = () => {
                 </div>
               </div>
             </Card>
-            
+
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mt-6 mb-4">
               LLM Services
             </h2>
-            
+
             <div className="grid gap-4">
               {providerConfigs.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -386,7 +381,7 @@ const LLMConfiguration = () => {
                 providerConfigs.map((providerConfig) => {
                   const provider = providers[providerConfig.id];
                   if (!provider) return null;
-                  
+
                   return (
                     <Card key={providerConfig.id}>
                       <div className="p-4">
@@ -403,7 +398,9 @@ const LLMConfiguration = () => {
                               <label
                                 htmlFor={`toggle-${providerConfig.id}`}
                                 className={`absolute inset-0 rounded-full cursor-pointer transition-colors duration-300 ${
-                                  providerConfig.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                                  providerConfig.enabled
+                                    ? 'bg-green-500'
+                                    : 'bg-gray-300 dark:bg-gray-600'
                                 }`}
                               >
                                 <span
@@ -415,7 +412,8 @@ const LLMConfiguration = () => {
                             </div>
                             <div>
                               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                {providerConfig.id.charAt(0).toUpperCase() + providerConfig.id.slice(1)}
+                                {providerConfig.id.charAt(0).toUpperCase() +
+                                  providerConfig.id.slice(1)}
                               </h3>
                               <p className="text-sm text-gray-500 dark:text-gray-400">
                                 {providerConfig.enabled ? (
@@ -427,7 +425,7 @@ const LLMConfiguration = () => {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-4">
                           {provider.requires_api_key && (
                             <div>
@@ -445,7 +443,7 @@ const LLMConfiguration = () => {
                               </div>
                             </div>
                           )}
-                          
+
                           {provider.requires_base_url && (
                             <div>
                               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -474,14 +472,12 @@ const LLMConfiguration = () => {
                                 {providerConfig.isPolling ? 'Polling...' : 'Poll Models'}
                               </Button>
                             )}
-                            
-                            <Button
-                              onClick={() => saveProviderConfig(providerConfig.id)}
-                            >
+
+                            <Button onClick={() => saveProviderConfig(providerConfig.id)}>
                               Save Configuration
                             </Button>
                           </div>
-                          
+
                           <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                               Chat Model
@@ -498,7 +494,9 @@ const LLMConfiguration = () => {
                                   onChange={(e) => updateModel(providerConfig.id, e.target.value)}
                                 >
                                   {providerConfig.available_models.map((model) => (
-                                    <option key={model} value={model}>{model}</option>
+                                    <option key={model} value={model}>
+                                      {model}
+                                    </option>
                                   ))}
                                 </select>
                               ) : (
@@ -514,7 +512,7 @@ const LLMConfiguration = () => {
                               )}
                             </div>
                           </div>
-                          
+
                           <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                               Embedding Model
@@ -528,10 +526,14 @@ const LLMConfiguration = () => {
                                 <select
                                   className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
                                   value={providerConfig.embedding_model}
-                                  onChange={(e) => updateEmbeddingModel(providerConfig.id, e.target.value)}
+                                  onChange={(e) =>
+                                    updateEmbeddingModel(providerConfig.id, e.target.value)
+                                  }
                                 >
                                   {providerConfig.embedding_models.map((model) => (
-                                    <option key={model} value={model}>{model}</option>
+                                    <option key={model} value={model}>
+                                      {model}
+                                    </option>
                                   ))}
                                 </select>
                               ) : (
@@ -540,7 +542,9 @@ const LLMConfiguration = () => {
                                     type="text"
                                     className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
                                     value={providerConfig.embedding_model}
-                                    onChange={(e) => updateEmbeddingModel(providerConfig.id, e.target.value)}
+                                    onChange={(e) =>
+                                      updateEmbeddingModel(providerConfig.id, e.target.value)
+                                    }
                                     placeholder="e.g., text-embedding-ada-002"
                                   />
                                 </div>
@@ -561,4 +565,4 @@ const LLMConfiguration = () => {
   );
 };
 
-export default withAdmin(LLMConfiguration, "LLM Configuration");
+export default withAdmin(LLMConfiguration, 'LLM Configuration');

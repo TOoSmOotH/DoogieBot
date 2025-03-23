@@ -17,7 +17,7 @@ const api = axios.create({
 export const getApiUrl = (path: string, useBaseUrl = true): string => {
   // Add leading slash if missing
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  
+
   if (useBaseUrl) {
     // Regular API requests through axios - use /api prefix
     return `${API_BASE_URL}${normalizedPath}`;
@@ -34,14 +34,14 @@ let failedQueue: any[] = [];
 
 // Process the queue of failed requests
 const processQueue = (error: any = null, token: string | null = null) => {
-  failedQueue.forEach(prom => {
+  failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
     } else {
       prom.resolve(token);
     }
   });
-  
+
   failedQueue = [];
 };
 
@@ -52,22 +52,22 @@ const refreshToken = async (): Promise<string | null> => {
     if (!refreshToken) {
       return null;
     }
-    
+
     const refreshUrl = getApiUrl('/auth/refresh');
     console.log('Refreshing token at:', refreshUrl);
-    
+
     const response = await axios.post<Token>(
       refreshUrl,
       { refresh_token: refreshToken },
       { headers: { 'Content-Type': 'application/json' } }
     );
-    
+
     if (response.data) {
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('refreshToken', response.data.refresh_token);
       return response.data.access_token;
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error refreshing token:', error);
@@ -80,7 +80,7 @@ const isTokenExpired = (token: string): boolean => {
   try {
     const decoded: any = jwtDecode(token);
     const currentTime = Date.now() / 1000;
-    
+
     // Add a buffer of 30 seconds to refresh before actual expiration
     return decoded.exp < currentTime + 30;
   } catch (error) {
@@ -97,21 +97,21 @@ api.interceptors.request.use(
       baseURL: config.baseURL,
       fullUrl: config.baseURL && config.url ? `${config.baseURL}${config.url}` : 'unknown',
       data: config.data,
-      headers: config.headers
+      headers: config.headers,
     });
-    
+
     const token = localStorage.getItem('token');
-    
+
     if (token) {
       // Check if token is expired and needs refreshing
       if (isTokenExpired(token) && !config.url?.includes('/auth/refresh')) {
         if (!isRefreshing) {
           isRefreshing = true;
-          
+
           const newToken = await refreshToken();
-          
+
           isRefreshing = false;
-          
+
           if (newToken) {
             config.headers.Authorization = `Bearer ${newToken}`;
             processQueue(null, newToken);
@@ -129,11 +129,11 @@ api.interceptors.request.use(
           return new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject });
           })
-            .then(token => {
+            .then((token) => {
               config.headers.Authorization = `Bearer ${token}`;
               return config;
             })
-            .catch(error => {
+            .catch((error) => {
               return Promise.reject(error);
             });
         }
@@ -141,7 +141,7 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
-    
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -158,10 +158,11 @@ api.interceptors.response.use(
         method: response.config.method,
         url: response.config.url,
         baseURL: response.config.baseURL,
-        fullUrl: response.config.baseURL && response.config.url 
-          ? `${response.config.baseURL}${response.config.url}` 
-          : 'unknown',
-      }
+        fullUrl:
+          response.config.baseURL && response.config.url
+            ? `${response.config.baseURL}${response.config.url}`
+            : 'unknown',
+      },
     });
     return response;
   },
@@ -174,27 +175,28 @@ api.interceptors.response.use(
         method: error.config?.method,
         url: error.config?.url,
         baseURL: error.config?.baseURL,
-        fullUrl: error.config?.baseURL && error.config?.url 
-          ? `${error.config.baseURL}${error.config.url}` 
-          : 'unknown',
-      }
+        fullUrl:
+          error.config?.baseURL && error.config?.url
+            ? `${error.config.baseURL}${error.config.url}`
+            : 'unknown',
+      },
     });
-    
+
     const originalRequest: any = error.config;
-    
+
     // Handle 401 Unauthorized errors
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Mark the request as retried
       originalRequest._retry = true;
-      
+
       if (!isRefreshing) {
         isRefreshing = true;
-        
+
         try {
           const newToken = await refreshToken();
-          
+
           isRefreshing = false;
-          
+
           if (newToken) {
             // Retry the original request with the new token
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -228,12 +230,12 @@ api.interceptors.response.use(
             },
             reject: (err: any) => {
               reject(err);
-            }
+            },
           });
         });
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -241,10 +243,33 @@ api.interceptors.response.use(
 // Helper for handling API errors
 const handleApiError = (error: any): ApiResponse<any> => {
   const axiosError = error as AxiosError;
-  if (axiosError.response?.data && typeof axiosError.response.data === 'object' && 'detail' in axiosError.response.data) {
-    return { error: axiosError.response.data.detail as string };
+  console.log('API Error Response:', {
+    status: axiosError.response?.status,
+    data: axiosError.response?.data,
+    headers: axiosError.response?.headers,
+  });
+
+  if (axiosError.response?.data) {
+    // FastAPI returns errors in the format { detail: "error message" }
+    if (typeof axiosError.response.data === 'object' && 'detail' in axiosError.response.data) {
+      return { error: axiosError.response.data.detail as string };
+    }
+    // Handle string error responses
+    if (typeof axiosError.response.data === 'string') {
+      return { error: axiosError.response.data };
+    }
+    // Handle other object error responses
+    if (typeof axiosError.response.data === 'object') {
+      if ('error' in axiosError.response.data) {
+        return { error: axiosError.response.data.error as string };
+      }
+      if ('message' in axiosError.response.data) {
+        return { error: axiosError.response.data.message as string };
+      }
+    }
   }
-  return { error: axiosError.message };
+  // Fallback to axios error message or generic error
+  return { error: axiosError.message || 'An unexpected error occurred' };
 };
 
 // Generic GET request

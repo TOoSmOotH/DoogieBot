@@ -22,7 +22,7 @@ export const getProviderModels = async (
   const params = new URLSearchParams();
   if (apiKey) params.append('api_key', apiKey);
   if (baseUrl) params.append('base_url', baseUrl);
-  
+
   const queryString = params.toString() ? `?${params.toString()}` : '';
   const response = await get<{ chat_models: string[]; embedding_models: string[] }>(
     `/llm/providers/${providerId}/models${queryString}`
@@ -34,7 +34,7 @@ export const getProviderModels = async (
 
   return {
     chatModels: response.data?.chat_models || [],
-    embeddingModels: response.data?.embedding_models || []
+    embeddingModels: response.data?.embedding_models || [],
   };
 };
 
@@ -101,7 +101,9 @@ export const updateLLMConfig = async (
 };
 
 // Activate LLM configuration
-export const activateLLMConfig = async (configId: string): Promise<{ config?: LLMConfig; error?: string }> => {
+export const activateLLMConfig = async (
+  configId: string
+): Promise<{ config?: LLMConfig; error?: string }> => {
   const response = await post<LLMConfig>(`/llm/admin/config/${configId}/activate`, {});
 
   if (response.error) {
@@ -112,7 +114,9 @@ export const activateLLMConfig = async (configId: string): Promise<{ config?: LL
 };
 
 // Delete LLM configuration
-export const deleteLLMConfig = async (configId: string): Promise<{ success?: boolean; error?: string }> => {
+export const deleteLLMConfig = async (
+  configId: string
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await del(`/llm/admin/config/${configId}`);
 
   if (response.error) {

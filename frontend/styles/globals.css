@@ -284,8 +284,8 @@ body {
   @apply list-none pl-0;
 }
 
-.assistant-message ul li[data-task-list-item] > input[type="checkbox"],
-.user-message ul li[data-task-list-item] > input[type="checkbox"] {
+.assistant-message ul li[data-task-list-item] > input[type='checkbox'],
+.user-message ul li[data-task-list-item] > input[type='checkbox'] {
   @apply mr-2 align-middle;
 }
 

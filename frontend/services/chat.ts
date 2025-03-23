@@ -38,7 +38,10 @@ export const createChat = async (title: string): Promise<{ chat?: Chat; error?: 
 };
 
 // Update a chat
-export const updateChat = async (chatId: string, title: string): Promise<{ success?: boolean; error?: string }> => {
+export const updateChat = async (
+  chatId: string,
+  title: string
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await put(`/chats/${chatId}`, { title });
 
   if (response.error) {
@@ -49,7 +52,9 @@ export const updateChat = async (chatId: string, title: string): Promise<{ succe
 };
 
 // Delete a chat
-export const deleteChat = async (chatId: string): Promise<{ success?: boolean; error?: string }> => {
+export const deleteChat = async (
+  chatId: string
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await del(`/chats/${chatId}`);
 
   if (response.error) {
@@ -60,7 +65,10 @@ export const deleteChat = async (chatId: string): Promise<{ success?: boolean; e
 };
 
 // Send a message to a chat (just stores the message, doesn't get LLM response)
-export const sendMessage = async (chatId: string, content: string): Promise<{ message?: Message; error?: string }> => {
+export const sendMessage = async (
+  chatId: string,
+  content: string
+): Promise<{ message?: Message; error?: string }> => {
   const response = await post<Message>(`/chats/${chatId}/messages`, { role: 'user', content });
 
   if (response.error) {
@@ -71,7 +79,10 @@ export const sendMessage = async (chatId: string, content: string): Promise<{ me
 };
 
 // Send a message to the LLM and get a response
-export const sendMessageToLLM = async (chatId: string, content: string): Promise<{ message?: Message; error?: string }> => {
+export const sendMessageToLLM = async (
+  chatId: string,
+  content: string
+): Promise<{ message?: Message; error?: string }> => {
   const response = await post<Message>(`/chats/${chatId}/llm`, { role: 'user', content });
 
   if (response.error) {
@@ -92,7 +103,7 @@ export const streamMessage = async (
   try {
     // Note: We don't need to add the user message here as it's already added in the backend
     // and we're adding it to the UI in the chat component
-    
+
     // Get token for authentication
     const token = localStorage.getItem('token');
     if (!token) {
@@ -104,10 +115,10 @@ export const streamMessage = async (
       `/chats/${chatId}/stream?content=${encodeURIComponent(content)}&token=${encodeURIComponent(token)}`,
       false
     );
-    
+
     // Set up event source for SSE
     const eventSource = new EventSource(streamUrl);
-    
+
     let fullContent = '';
     let metadata: {
       tokens?: number;
@@ -115,26 +126,26 @@ export const streamMessage = async (
       model?: string;
       provider?: string;
     } | null = null;
-    
+
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         // Update full content
         fullContent = data.content;
-        
+
         // Send the content to the callback - the frontend will handle displaying it
         onChunk(data.content);
-        
+
         // Store metadata if available
         if (data.metadata) {
           metadata = data.metadata;
         }
-        
+
         // If this is the final chunk, complete the process
         if (data.done) {
           eventSource.close();
-          
+
           // Construct the complete message
           const message: Message = {
             id: Date.now(), // Temporary ID until we fetch the actual message
@@ -145,9 +156,9 @@ export const streamMessage = async (
             tokens: metadata?.tokens,
             tokens_per_second: metadata?.tokens_per_second,
             model: metadata?.model,
-            provider: metadata?.provider
+            provider: metadata?.provider,
           };
-          
+
           onComplete(message);
         }
       } catch (e) {
@@ -156,7 +167,7 @@ export const streamMessage = async (
         eventSource.close();
       }
     };
-    
+
     eventSource.onerror = (error) => {
       console.error('EventSource error:', error);
       onError('Connection error during streaming');
@@ -196,20 +207,20 @@ export const getFeedbackMessages = async (
 }> => {
   let url = '/chats/admin/feedback';
   const params = new URLSearchParams();
-  
+
   if (feedbackType) {
     params.append('feedback_type', feedbackType);
   }
-  
+
   if (reviewed !== undefined) {
     params.append('reviewed', reviewed.toString());
   }
-  
+
   const queryString = params.toString();
   if (queryString) {
     url += `?${queryString}`;
   }
-  
+
   const response = await get<Message[]>(url);
 
   if (response.error) {
@@ -220,7 +231,9 @@ export const getFeedbackMessages = async (
 };
 
 // Get all chats with negative feedback (admin only) - Legacy function for compatibility
-export const getFlaggedChats = async (params?: PaginationParams): Promise<{
+export const getFlaggedChats = async (
+  params?: PaginationParams
+): Promise<{
   chats?: PaginatedResponse<Chat>;
   error?: string;
 }> => {
@@ -234,7 +247,9 @@ export const getFlaggedChats = async (params?: PaginationParams): Promise<{
 };
 
 // Mark message as reviewed (admin only)
-export const markMessageAsReviewed = async (messageId: string): Promise<{ message?: Message; error?: string }> => {
+export const markMessageAsReviewed = async (
+  messageId: string
+): Promise<{ message?: Message; error?: string }> => {
   const response = await put<Message>(`/chats/admin/messages/${messageId}`, { reviewed: true });
 
   if (response.error) {

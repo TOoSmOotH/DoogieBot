@@ -1,26 +1,22 @@
-from typing import Any, List, Dict, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-import json
 import asyncio
+import json
+from typing import Any, Dict, List, Optional
 
+from app.core.config import settings
 from app.db.base import get_db
 from app.models.user import User
+from app.schemas.llm import (LLMConfigCreate, LLMConfigResponse,
+                             LLMConfigUpdate, LLMProviderInfo,
+                             LLMProviderResponse, ModelsResponse)
 from app.services.llm import LLMService
 from app.services.llm_config import LLMConfigService
-from app.schemas.llm import (
-    LLMConfigCreate,
-    LLMConfigUpdate,
-    LLMConfigResponse,
-    LLMProviderResponse,
-    LLMProviderInfo,
-    ModelsResponse
-)
-from app.utils.deps import get_current_user, get_current_admin_user
-from app.core.config import settings
+from app.utils.deps import get_current_admin_user, get_current_user
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 router = APIRouter()
+
 
 @router.get("/providers", response_model=Dict[str, Any])
 async def get_providers(
@@ -32,6 +28,7 @@ async def get_providers(
     """
     providers = LLMConfigService.get_available_providers(db)
     return providers
+
 
 @router.get("/providers/{provider_id}/models", response_model=ModelsResponse)
 async def get_provider_models(
@@ -48,24 +45,19 @@ async def get_provider_models(
     try:
         # Create a temporary LLM service to get models
         llm_service = LLMService(
-            db=db,
-            provider=provider_id,
-            api_key=api_key,
-            base_url=base_url
+            db=db, provider=provider_id, api_key=api_key, base_url=base_url
         )
-        
+
         # Get available models
         chat_models, embedding_models = await llm_service.get_available_models()
-        
-        return {
-            "chat_models": chat_models,
-            "embedding_models": embedding_models
-        }
+
+        return {"chat_models": chat_models, "embedding_models": embedding_models}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to get models: {str(e)}"
+            detail=f"Failed to get models: {str(e)}",
         )
+
 
 @router.post("/chat/{chat_id}")
 async def chat(
@@ -89,17 +81,16 @@ async def chat(
     # Create LLM service with optional overrides
     # If not provided, it will use the active configuration from the database
     llm_service = LLMService(
-        db=db,
-        provider=provider,
-        model=model,
-        system_prompt=system_prompt
+        db=db, provider=provider, model=model, system_prompt=system_prompt
     )
-    
+
     # Handle streaming response
     if stream:
         return StreamingResponse(
-            stream_chat_response(llm_service, chat_id, message, use_rag, temperature, max_tokens),
-            media_type="text/event-stream"
+            stream_chat_response(
+                llm_service, chat_id, message, use_rag, temperature, max_tokens
+            ),
+            media_type="text/event-stream",
         )
     else:
         # Get response from LLM
@@ -109,10 +100,11 @@ async def chat(
             use_rag=use_rag,
             temperature=temperature,
             max_tokens=max_tokens,
-            stream=False
+            stream=False,
         )
-        
+
         return response
+
 
 async def stream_chat_response(
     llm_service: LLMService,
@@ -120,7 +112,7 @@ async def stream_chat_response(
     message: str,
     use_rag: bool,
     temperature: float,
-    max_tokens: Optional[int]
+    max_tokens: Optional[int],
 ):
     """
     Stream chat response as server-sent events.
@@ -133,24 +125,22 @@ async def stream_chat_response(
             use_rag=use_rag,
             temperature=temperature,
             max_tokens=max_tokens,
-            stream=True
+            stream=True,
         ):
             # Format as server-sent event
             yield f"data: {json.dumps(chunk)}\n\n"
-            
+
             # Add a small delay to prevent overwhelming the client
             await asyncio.sleep(0.01)
-        
+
         # End of stream
         yield "data: [DONE]\n\n"
     except Exception as e:
         # Send error as event
-        error_data = {
-            "error": str(e),
-            "done": True
-        }
+        error_data = {"error": str(e), "done": True}
         yield f"data: {json.dumps(error_data)}\n\n"
         yield "data: [DONE]\n\n"
+
 
 @router.post("/embeddings", response_model=List[List[float]])
 async def get_embeddings(
@@ -165,17 +155,14 @@ async def get_embeddings(
     """
     # Use default provider if not specified
     provider = provider or settings.DEFAULT_LLM_PROVIDER
-    
+
     # Create LLM service
-    llm_service = LLMService(
-        db=db,
-        provider=provider,
-        model=model
-    )
-    
+    llm_service = LLMService(db=db, provider=provider, model=model)
+
     # Get embeddings
     embeddings = await llm_service.get_embeddings(texts)
     return embeddings
+
 
 @router.post("/admin/config", response_model=LLMConfigResponse)
 async def create_llm_config(
@@ -188,6 +175,7 @@ async def create_llm_config(
     """
     db_config = LLMConfigService.create_config(db, config)
     return db_config
+
 
 @router.put("/admin/config/{config_id}", response_model=LLMConfigResponse)
 async def update_llm_config(
@@ -202,10 +190,10 @@ async def update_llm_config(
     db_config = LLMConfigService.update_config(db, config_id, config)
     if not db_config:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Configuration not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found"
         )
     return db_config
+
 
 @router.get("/admin/config", response_model=List[LLMConfigResponse])
 async def get_all_llm_configs(
@@ -217,6 +205,7 @@ async def get_all_llm_configs(
     """
     configs = LLMConfigService.get_all_configs(db)
     return configs
+
 
 @router.get("/admin/config/active", response_model=LLMConfigResponse)
 async def get_active_llm_config(
@@ -230,9 +219,10 @@ async def get_active_llm_config(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active configuration found"
+            detail="No active configuration found",
         )
     return config
+
 
 @router.post("/admin/config/{config_id}/activate", response_model=LLMConfigResponse)
 async def activate_llm_config(
@@ -246,10 +236,10 @@ async def activate_llm_config(
     config = LLMConfigService.set_active_config(db, config_id)
     if not config:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Configuration not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found"
         )
     return config
+
 
 @router.delete("/admin/config/{config_id}", response_model=Dict[str, Any])
 async def delete_llm_config(
@@ -265,12 +255,8 @@ async def delete_llm_config(
         success = LLMConfigService.delete_config(db, config_id)
         if not success:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Configuration not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Configuration not found"
             )
         return {"status": "success", "message": "Configuration deleted"}
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

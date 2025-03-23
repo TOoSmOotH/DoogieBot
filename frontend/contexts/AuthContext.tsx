@@ -5,7 +5,7 @@ import {
   login as loginService,
   logout as logoutService,
   register as registerService,
-  refreshToken as refreshTokenService
+  refreshToken as refreshTokenService,
 } from '@/services/auth';
 import { useRouter } from 'next/router';
 import { getToken } from '@/services/api';
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const decoded: any = jwtDecode(token);
       const currentTime = Date.now() / 1000;
-      
+
       // Add a buffer of 30 seconds to refresh before actual expiration
       return decoded.exp < currentTime + 30;
     } catch (error) {
@@ -67,7 +67,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               return;
             }
           }
-          
+
           const { user, error } = await getCurrentUser();
           if (user) {
             setUser(user);

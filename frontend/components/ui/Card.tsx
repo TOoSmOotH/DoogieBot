@@ -51,10 +51,7 @@ interface CardDescriptionProps extends HTMLAttributes<HTMLParagraphElement> {
 
 const CardDescription = ({ children, className = '', ...props }: CardDescriptionProps) => {
   return (
-    <p
-      className={`text-sm text-gray-500 dark:text-gray-400 ${className}`}
-      {...props}
-    >
+    <p className={`text-sm text-gray-500 dark:text-gray-400 ${className}`} {...props}>
       {children}
     </p>
   );

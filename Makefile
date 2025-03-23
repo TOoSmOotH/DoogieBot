@@ -132,8 +132,12 @@ docker-lint:
 # Formatting (Local as primary command)
 format:
 	@echo "${YELLOW}Formatting backend code locally...${NC}"
-	$(BACKEND_FORMAT) backend/app backend/tests
-	$(BACKEND_ISORT) backend/app backend/tests
+	$(BACKEND_FORMAT) backend/app
+	$(BACKEND_ISORT) backend/app
+	@if [ -d "backend/tests" ]; then \
+		$(BACKEND_FORMAT) backend/tests; \
+		$(BACKEND_ISORT) backend/tests; \
+	fi
 	@echo "${YELLOW}Formatting frontend code locally...${NC}"
 	cd frontend && npm run format
 	@echo "${GREEN}Formatting complete.${NC}"
@@ -141,7 +145,7 @@ format:
 # Formatting (Docker)
 docker-format:
 	@echo "${YELLOW}Formatting backend code in Docker...${NC}"
-	$(DOCKER_COMPOSE) exec app bash -c "cd /app/backend && pip install black isort && black app tests && isort app tests"
+	$(DOCKER_COMPOSE) exec app bash -c "cd /app/backend && pip install black isort && black app && isort app && if [ -d 'tests' ]; then black tests && isort tests; fi"
 	@echo "${YELLOW}Formatting frontend code in Docker...${NC}"
 	$(DOCKER_COMPOSE) exec app bash -c "cd /app/frontend && npm run format"
 	@echo "${GREEN}Formatting complete.${NC}"

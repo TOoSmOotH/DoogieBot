@@ -36,7 +36,7 @@ const ChatReview = () => {
     try {
       const { success, error } = await deleteChat(chatId);
       if (success) {
-        setChats(chats.filter(chat => chat.id !== chatId));
+        setChats(chats.filter((chat) => chat.id !== chatId));
       } else if (error) {
         setError(error);
       }
@@ -52,13 +52,13 @@ const ChatReview = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Flagged Chats Review</h1>
         </div>
-        
+
         {error && (
           <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-md">
             {error}
           </div>
         )}
-        
+
         {loading ? (
           <div className="text-center">Loading chats...</div>
         ) : (
@@ -79,38 +79,42 @@ const ChatReview = () => {
                   </div>
 
                   <div className="space-y-2">
-                    {chat.messages && chat.messages.map((message, index) => (
-                      <div key={message.id} className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-2">
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {message.role === 'user' ? 'User' : 'Assistant'}
-                        </h4>
-                        <p className="mt-1 text-gray-900 dark:text-white whitespace-pre-wrap">
-                          {message.content}
-                        </p>
-                        {message.feedback && (
-                          <div className="mt-2">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              message.feedback === 'positive' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                              'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                            }`}>
-                              {message.feedback === 'positive' ? 'Positive' : 'Negative'} Feedback
-                            </span>
-                            {message.feedback_text && (
-                              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                "{message.feedback_text}"
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                    {chat.messages &&
+                      chat.messages.map((message, index) => (
+                        <div
+                          key={message.id}
+                          className="border-b border-gray-200 dark:border-gray-700 last:border-0 pb-2"
+                        >
+                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {message.role === 'user' ? 'User' : 'Assistant'}
+                          </h4>
+                          <p className="mt-1 text-gray-900 dark:text-white whitespace-pre-wrap">
+                            {message.content}
+                          </p>
+                          {message.feedback && (
+                            <div className="mt-2">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  message.feedback === 'positive'
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                }`}
+                              >
+                                {message.feedback === 'positive' ? 'Positive' : 'Negative'} Feedback
+                              </span>
+                              {message.feedback_text && (
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                  "{message.feedback_text}"
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                   </div>
 
                   <div className="flex justify-end">
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleDeleteChat(chat.id)}
-                    >
+                    <Button variant="destructive" onClick={() => handleDeleteChat(chat.id)}>
                       Delete Chat
                     </Button>
                   </div>
@@ -129,4 +133,4 @@ const ChatReview = () => {
   );
 };
 
-export default withAdmin(ChatReview, "Chat Review");
+export default withAdmin(ChatReview, 'Chat Review');

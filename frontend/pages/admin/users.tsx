@@ -16,7 +16,7 @@ const UserManagement = () => {
   const [params, setParams] = useState<UserListParams>({
     page: 1,
     size: 10,
-    filter: 'all'
+    filter: 'all',
   });
   const [users, setUsers] = useState<PaginatedResponse<User> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,11 +30,12 @@ const UserManagement = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = params.filter === 'all'
-        ? await getUsers({ page: params.page, size: params.size })
-        : await getPendingUsers({ page: params.page, size: params.size });
-        
+
+      const response =
+        params.filter === 'all'
+          ? await getUsers({ page: params.page, size: params.size })
+          : await getPendingUsers({ page: params.page, size: params.size });
+
       if (response.error) {
         setError(response.error);
       } else if (response.users) {
@@ -49,11 +50,11 @@ const UserManagement = () => {
   };
 
   const handlePageChange = (newPage: number) => {
-    setParams(prev => ({ ...prev, page: newPage }));
+    setParams((prev) => ({ ...prev, page: newPage }));
   };
 
   const handleFilterChange = (filter: 'all' | 'pending') => {
-    setParams(prev => ({ ...prev, filter, page: 1 }));
+    setParams((prev) => ({ ...prev, filter, page: 1 }));
   };
 
   const toggleUserStatus = async (userId: string, status: string) => {
@@ -104,7 +105,7 @@ const UserManagement = () => {
             {error}
           </div>
         )}
-        
+
         {loading ? (
           <div className="text-center py-8">Loading users...</div>
         ) : (
@@ -114,14 +115,24 @@ const UserManagement = () => {
                 <Card key={user.id}>
                   <div className="flex items-center justify-between p-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{user.email}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {user.email}
+                      </h3>
                       <div className="mt-1 flex gap-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          user.status === 'active' ? 'bg-green-100 text-green-800' :
-                          user.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {user.status === 'active' ? 'Active' :
-                           user.status === 'pending' ? 'Pending' : 'Inactive'}
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            user.status === 'active'
+                              ? 'bg-green-100 text-green-800'
+                              : user.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                          }`}
+                        >
+                          {user.status === 'active'
+                            ? 'Active'
+                            : user.status === 'pending'
+                              ? 'Pending'
+                              : 'Inactive'}
                         </span>
                         {user.role === 'admin' && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -177,4 +188,4 @@ const UserManagement = () => {
   );
 };
 
-export default withAdmin(UserManagement, "User Management");
+export default withAdmin(UserManagement, 'User Management');

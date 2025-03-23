@@ -20,7 +20,7 @@ const RAGManagement = () => {
     rebuild: false,
     use_bm25: true,
     use_faiss: true,
-    use_graph: true
+    use_graph: true,
   });
 
   useEffect(() => {
@@ -45,7 +45,10 @@ const RAGManagement = () => {
     }
   };
 
-  const handleToggleComponent = async (component: 'bm25' | 'faiss' | 'graph', currentEnabled: boolean) => {
+  const handleToggleComponent = async (
+    component: 'bm25' | 'faiss' | 'graph',
+    currentEnabled: boolean
+  ) => {
     try {
       const { error } = await toggleRAGComponent(component, !currentEnabled);
       if (error) {
@@ -78,13 +81,15 @@ const RAGManagement = () => {
     }
   };
 
-  const renderComponentStatus = (name: string, status: RAGComponentStatus, component: 'bm25' | 'faiss' | 'graph') => (
+  const renderComponentStatus = (
+    name: string,
+    status: RAGComponentStatus,
+    component: 'bm25' | 'faiss' | 'graph'
+  ) => (
     <Card key={name}>
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {name}
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{name}</h3>
           <Button
             variant={status.enabled ? 'default' : 'outline'}
             onClick={() => handleToggleComponent(component, status.enabled)}
@@ -93,7 +98,7 @@ const RAGManagement = () => {
             {status.enabled ? 'Enabled' : 'Disabled'}
           </Button>
         </div>
-        
+
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">Status:</span>
@@ -103,7 +108,9 @@ const RAGManagement = () => {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">Indexed Documents:</span>
-            <span className="font-medium text-gray-900 dark:text-white">{status.document_count}</span>
+            <span className="font-medium text-gray-900 dark:text-white">
+              {status.document_count}
+            </span>
           </div>
           {component === 'graph' && status.node_count !== undefined && (
             <div className="flex justify-between text-sm">
@@ -126,9 +133,7 @@ const RAGManagement = () => {
             </div>
           )}
           {status.error_message && (
-            <div className="text-sm text-red-500">
-              Error: {status.error_message}
-            </div>
+            <div className="text-sm text-red-500">Error: {status.error_message}</div>
           )}
         </div>
       </div>
@@ -142,9 +147,7 @@ const RAGManagement = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">RAG Management</h1>
           <div className="flex space-x-2">
             <Link href="/admin/documents">
-              <Button variant="outline">
-                Manage Documents
-              </Button>
+              <Button variant="outline">Manage Documents</Button>
             </Link>
             <div className="flex space-x-2">
               <Button
@@ -164,13 +167,13 @@ const RAGManagement = () => {
             </div>
           </div>
         </div>
-        
+
         {error && (
           <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800">
             {error}
           </div>
         )}
-        
+
         {isLoading ? (
           <div className="text-center py-8">Loading...</div>
         ) : stats ? (
@@ -178,7 +181,7 @@ const RAGManagement = () => {
             {renderComponentStatus('BM25 Index', stats.bm25_status, 'bm25')}
             {renderComponentStatus('FAISS Vector Store', stats.faiss_status, 'faiss')}
             {renderComponentStatus('Graph RAG', stats.graph_status, 'graph')}
-            
+
             <Card>
               <div className="p-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -187,11 +190,15 @@ const RAGManagement = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Total Documents:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{stats.document_count}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {stats.document_count}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Total Chunks:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{stats.chunk_count}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {stats.chunk_count}
+                    </span>
                   </div>
                   {stats.last_updated && (
                     <div className="flex justify-between text-sm">
@@ -216,7 +223,7 @@ const RAGManagement = () => {
           <div className="text-center py-8">No RAG statistics available</div>
         )}
       </div>
-      
+
       <Dialog
         isOpen={showRebuildDialog}
         onClose={() => setShowRebuildDialog(false)}
@@ -224,55 +231,64 @@ const RAGManagement = () => {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Select which indexes to rebuild and whether to rebuild from scratch or update existing indexes.
+            Select which indexes to rebuild and whether to rebuild from scratch or update existing
+            indexes.
           </p>
-          
+
           <div className="space-y-2">
             <div className="flex items-center">
               <input
                 type="checkbox"
                 id="rebuild"
                 checked={rebuildOptions.rebuild}
-                onChange={(e) => setRebuildOptions({...rebuildOptions, rebuild: e.target.checked})}
+                onChange={(e) =>
+                  setRebuildOptions({ ...rebuildOptions, rebuild: e.target.checked })
+                }
                 className="mr-2"
               />
               <label htmlFor="rebuild">Rebuild from scratch (slower but more thorough)</label>
             </div>
-            
+
             <div className="flex items-center">
               <input
                 type="checkbox"
                 id="use_bm25"
                 checked={rebuildOptions.use_bm25}
-                onChange={(e) => setRebuildOptions({...rebuildOptions, use_bm25: e.target.checked})}
+                onChange={(e) =>
+                  setRebuildOptions({ ...rebuildOptions, use_bm25: e.target.checked })
+                }
                 className="mr-2"
               />
               <label htmlFor="use_bm25">Include BM25 Index</label>
             </div>
-            
+
             <div className="flex items-center">
               <input
                 type="checkbox"
                 id="use_faiss"
                 checked={rebuildOptions.use_faiss}
-                onChange={(e) => setRebuildOptions({...rebuildOptions, use_faiss: e.target.checked})}
+                onChange={(e) =>
+                  setRebuildOptions({ ...rebuildOptions, use_faiss: e.target.checked })
+                }
                 className="mr-2"
               />
               <label htmlFor="use_faiss">Include FAISS Vector Store</label>
             </div>
-            
+
             <div className="flex items-center">
               <input
                 type="checkbox"
                 id="use_graph"
                 checked={rebuildOptions.use_graph}
-                onChange={(e) => setRebuildOptions({...rebuildOptions, use_graph: e.target.checked})}
+                onChange={(e) =>
+                  setRebuildOptions({ ...rebuildOptions, use_graph: e.target.checked })
+                }
                 className="mr-2"
               />
               <label htmlFor="use_graph">Include Graph RAG</label>
             </div>
           </div>
-          
+
           <div className="flex justify-end space-x-2 mt-4">
             <Button
               variant="outline"
@@ -285,7 +301,9 @@ const RAGManagement = () => {
               variant="default"
               onClick={handleRebuild}
               isLoading={isIndexing}
-              disabled={!rebuildOptions.use_bm25 && !rebuildOptions.use_faiss && !rebuildOptions.use_graph}
+              disabled={
+                !rebuildOptions.use_bm25 && !rebuildOptions.use_faiss && !rebuildOptions.use_graph
+              }
             >
               {isIndexing ? 'Rebuilding...' : 'Rebuild'}
             </Button>
@@ -300,10 +318,10 @@ const RAGManagement = () => {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Are you sure you want to delete all document chunks? This will remove all processed chunks from the database.
-            You will need to rebuild indexes after this operation.
+            Are you sure you want to delete all document chunks? This will remove all processed
+            chunks from the database. You will need to rebuild indexes after this operation.
           </p>
-          
+
           <div className="flex justify-end space-x-2 mt-4">
             <Button
               variant="outline"
@@ -343,4 +361,4 @@ const RAGManagement = () => {
   );
 };
 
-export default withAdmin(RAGManagement, "RAG Management");
+export default withAdmin(RAGManagement, 'RAG Management');

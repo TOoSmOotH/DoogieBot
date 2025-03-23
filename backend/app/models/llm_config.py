@@ -1,8 +1,9 @@
-from sqlalchemy import Column, String, Boolean, DateTime, func
-from sqlalchemy.dialects.sqlite import JSON
 import uuid
 
 from app.db.base import Base
+from sqlalchemy import Boolean, Column, DateTime, String, func
+from sqlalchemy.dialects.sqlite import JSON
+
 
 class LLMConfig(Base):
     """
@@ -10,6 +11,7 @@ class LLMConfig(Base):
     Only one configuration should be active at a time.
     The system_prompt is global and used for all LLM providers.
     """
+
     __tablename__ = "llm_config"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -22,6 +24,6 @@ class LLMConfig(Base):
     is_active = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
+
     # Additional configuration stored as JSON
     config = Column(JSON, nullable=True)

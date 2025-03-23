@@ -6,7 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Layout from '@/components/layout/Layout';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/Card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+} from '@/components/ui/Card';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 
@@ -42,9 +49,9 @@ export default function Login() {
 
     try {
       console.log('Attempting login with:', data.email);
-      
+
       const result = await login(data.email, data.password);
-      
+
       if (result.success) {
         router.push('/chat');
       } else {
@@ -96,7 +103,10 @@ export default function Login() {
               </Button>
               <p className="text-sm text-center text-gray-600 dark:text-gray-400">
                 Don't have an account?{' '}
-                <Link href="/register" className="text-primary-600 dark:text-primary-400 hover:underline">
+                <Link
+                  href="/register"
+                  className="text-primary-600 dark:text-primary-400 hover:underline"
+                >
                   Register
                 </Link>
               </p>

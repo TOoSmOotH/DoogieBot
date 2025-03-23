@@ -16,7 +16,8 @@ const getButtonClasses = (
   className?: string
 ): string => {
   // Base classes
-  let classes = 'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
+  let classes =
+    'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
 
   // Variant classes
   switch (variant) {
@@ -27,16 +28,20 @@ const getButtonClasses = (
       classes += ' bg-red-600 text-white hover:bg-red-700';
       break;
     case 'outline':
-      classes += ' border border-primary-200 dark:border-primary-800 bg-transparent hover:bg-primary-100 dark:hover:bg-primary-900';
+      classes +=
+        ' border border-primary-200 dark:border-primary-800 bg-transparent hover:bg-primary-100 dark:hover:bg-primary-900';
       break;
     case 'secondary':
-      classes += ' bg-secondary-200 dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 hover:bg-secondary-300 dark:hover:bg-secondary-700';
+      classes +=
+        ' bg-secondary-200 dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 hover:bg-secondary-300 dark:hover:bg-secondary-700';
       break;
     case 'ghost':
-      classes += ' bg-transparent hover:bg-primary-100 dark:hover:bg-primary-900 text-primary-900 dark:text-primary-100';
+      classes +=
+        ' bg-transparent hover:bg-primary-100 dark:hover:bg-primary-900 text-primary-900 dark:text-primary-100';
       break;
     case 'link':
-      classes += ' bg-transparent underline-offset-4 hover:underline text-primary-900 dark:text-primary-100';
+      classes +=
+        ' bg-transparent underline-offset-4 hover:underline text-primary-900 dark:text-primary-100';
       break;
   }
 

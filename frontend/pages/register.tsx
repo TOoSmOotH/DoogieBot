@@ -6,19 +6,28 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Layout from '@/components/layout/Layout';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/Card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+} from '@/components/ui/Card';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 
 // Define form schema
-const registerSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string().min(8, 'Password must be at least 8 characters'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ['confirmPassword'],
-});
+const registerSchema = z
+  .object({
+    email: z.string().email('Please enter a valid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
@@ -48,19 +57,31 @@ export default function Register() {
     setSuccess(null);
 
     try {
+      console.log('Attempting to register with email:', data.email);
       const result = await registerUser(data.email, data.password);
+      console.log('Registration result:', result);
+
       if (result.success) {
-        setSuccess('Registration successful! Your account is pending approval by an administrator. You will be redirected to the login page in 5 seconds.');
+        setSuccess(
+          'Registration successful! Your account is pending approval by an administrator. You will be redirected to the login page in 5 seconds.'
+        );
         // Add a delay before redirecting to login page so user can see the success message
         setTimeout(() => {
           router.push('/login');
         }, 5000); // 5 second delay
       } else {
-        setError(result.error || 'Registration failed. Please try again.');
+        if (result.error) {
+          console.log('Registration error received:', result.error);
+          // Just pass the error directly rather than modifying it here
+          // The UI will handle displaying a user-friendly message
+          setError(result.error);
+        } else {
+          setError('Registration failed. Please try again.');
+        }
       }
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
-      console.error(err);
+      console.error('Registration error caught in component:', err);
+      setError('An unexpected error occurred. Please try again later.');
     } finally {
       setIsLoading(false);
     }
@@ -77,8 +98,22 @@ export default function Register() {
           <form onSubmit={handleSubmit(onSubmit)}>
             <CardContent className="space-y-4">
               {error && (
-                <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 rounded-md">
-                  {error}
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 rounded-md flex flex-col gap-2">
+                  <p>
+                    {error === 'A user with this email already exists'
+                      ? 'This email is already registered. Please use a different email address or try logging in.'
+                      : error}
+                  </p>
+                  {error === 'A user with this email already exists' && (
+                    <div className="mt-2">
+                      <Link
+                        href="/login"
+                        className="text-primary-600 dark:text-primary-400 hover:underline"
+                      >
+                        Go to Login →
+                      </Link>
+                    </div>
+                  )}
                 </div>
               )}
               {success && (
@@ -124,7 +159,10 @@ export default function Register() {
               </Button>
               <p className="text-sm text-center text-gray-600 dark:text-gray-400">
                 Already have an account?{' '}
-                <Link href="/login" className="text-primary-600 dark:text-primary-400 hover:underline">
+                <Link
+                  href="/login"
+                  className="text-primary-600 dark:text-primary-400 hover:underline"
+                >
                   Login
                 </Link>
               </p>

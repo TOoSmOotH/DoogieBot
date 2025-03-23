@@ -2,7 +2,9 @@ import { Document, PaginatedResponse, PaginationParams, ProcessingStatus } from 
 import { del, get, getPaginated, post, put } from './api';
 
 // Get all documents with pagination
-export const getDocuments = async (params?: PaginationParams): Promise<{
+export const getDocuments = async (
+  params?: PaginationParams
+): Promise<{
   documents?: PaginatedResponse<Document>;
   error?: string;
 }> => {
@@ -19,7 +21,9 @@ export const getDocuments = async (params?: PaginationParams): Promise<{
 };
 
 // Get a single document by ID
-export const getDocument = async (documentId: string): Promise<{ document?: Document; error?: string }> => {
+export const getDocument = async (
+  documentId: string
+): Promise<{ document?: Document; error?: string }> => {
   const response = await get<Document>(`/documents/${documentId}`);
 
   if (response.error) {
@@ -30,10 +34,14 @@ export const getDocument = async (documentId: string): Promise<{ document?: Docu
 };
 
 // Upload a document
-export const uploadDocument = async (file: File, title?: string, process: boolean = false): Promise<{ document?: Document; error?: string }> => {
+export const uploadDocument = async (
+  file: File,
+  title?: string,
+  process: boolean = false
+): Promise<{ document?: Document; error?: string }> => {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   if (title) {
     formData.append('title', title);
   } else {
@@ -62,12 +70,16 @@ export const uploadDocument = async (file: File, title?: string, process: boolea
 };
 
 // Create a manual document
-export const createManualDocument = async (title: string, content: string, metaData?: any): Promise<{ document?: Document; error?: string }> => {
+export const createManualDocument = async (
+  title: string,
+  content: string,
+  metaData?: any
+): Promise<{ document?: Document; error?: string }> => {
   console.log('Creating manual document:', { title, contentLength: content.length });
   const response = await post<Document>('/documents/manual', {
     title,
     content,
-    meta_data: metaData
+    meta_data: metaData,
   });
 
   console.log('Manual document response:', response);
@@ -80,10 +92,14 @@ export const createManualDocument = async (title: string, content: string, metaD
 };
 
 // Update a document
-export const updateDocument = async (documentId: string, title?: string, metaData?: any): Promise<{ document?: Document; error?: string }> => {
+export const updateDocument = async (
+  documentId: string,
+  title?: string,
+  metaData?: any
+): Promise<{ document?: Document; error?: string }> => {
   const response = await put<Document>(`/documents/${documentId}`, {
     title,
-    meta_data: metaData
+    meta_data: metaData,
   });
 
   if (response.error) {
@@ -94,11 +110,19 @@ export const updateDocument = async (documentId: string, title?: string, metaDat
 };
 
 // Update a manual document's content
-export const updateDocumentContent = async (documentId: string, title: string, content: string): Promise<{ document?: Document; error?: string }> => {
-  console.log('Updating manual document content:', { documentId, title, contentLength: content.length });
+export const updateDocumentContent = async (
+  documentId: string,
+  title: string,
+  content: string
+): Promise<{ document?: Document; error?: string }> => {
+  console.log('Updating manual document content:', {
+    documentId,
+    title,
+    contentLength: content.length,
+  });
   const response = await put<Document>(`/documents/${documentId}/content`, {
     title,
-    content
+    content,
   });
 
   console.log('Update document content response:', response);
@@ -111,7 +135,9 @@ export const updateDocumentContent = async (documentId: string, title: string, c
 };
 
 // Delete a document
-export const deleteDocument = async (documentId: string): Promise<{ success?: boolean; error?: string }> => {
+export const deleteDocument = async (
+  documentId: string
+): Promise<{ success?: boolean; error?: string }> => {
   console.log('Deleting document:', documentId);
   const response = await del<boolean>(`/documents/${documentId}`);
 
@@ -125,7 +151,10 @@ export const deleteDocument = async (documentId: string): Promise<{ success?: bo
 };
 
 // Process a document
-export const processDocument = async (documentId: string, config?: any): Promise<{ status?: ProcessingStatus; error?: string }> => {
+export const processDocument = async (
+  documentId: string,
+  config?: any
+): Promise<{ status?: ProcessingStatus; error?: string }> => {
   console.log('Processing document:', documentId, config);
   const response = await post<ProcessingStatus>(`/documents/${documentId}/process`, config);
 
@@ -139,10 +168,13 @@ export const processDocument = async (documentId: string, config?: any): Promise
 };
 
 // Batch process documents
-export const batchProcessDocuments = async (documentIds: string[], config?: any): Promise<{ result?: any; error?: string }> => {
+export const batchProcessDocuments = async (
+  documentIds: string[],
+  config?: any
+): Promise<{ result?: any; error?: string }> => {
   const response = await post('/documents/batch-process', {
     document_ids: documentIds,
-    ...config
+    ...config,
   });
 
   if (response.error) {
@@ -186,38 +218,44 @@ export const rebuildGraphRAG = async (): Promise<{ success?: boolean; error?: st
 };
 
 // Delete all documents and reset RAG
-export const deleteAllDocumentsAndResetRAG = async (): Promise<{ success?: boolean; error?: string }> => {
+export const deleteAllDocumentsAndResetRAG = async (): Promise<{
+  success?: boolean;
+  error?: string;
+}> => {
   console.log('Deleting all documents and resetting RAG...');
-  
+
   // First delete all documents
   const deleteResponse = await del('/documents/all');
-  
+
   if (deleteResponse.error) {
     console.error('Error deleting all documents:', deleteResponse.error);
     return { error: deleteResponse.error };
   }
-  
+
   // Then delete all chunks
   const chunksResponse = await post('/rag/delete-all-chunks');
-  
+
   if (chunksResponse.error) {
     console.error('Error deleting all chunks:', chunksResponse.error);
     return { error: chunksResponse.error };
   }
-  
+
   // Reset the RAG system by deleting index files
   const resetResponse = await post('/rag/reset');
-  
+
   if (resetResponse.error) {
     console.error('Error resetting RAG system:', resetResponse.error);
     return { error: resetResponse.error };
   }
-  
+
   return { success: true };
 };
 
 // Add manual information to RAG
-export const addManualInfo = async (title: string, content: string): Promise<{ success?: boolean; error?: string }> => {
+export const addManualInfo = async (
+  title: string,
+  content: string
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await post('/documents/manual', { title, content });
 
   if (response.error) {
@@ -236,7 +274,7 @@ export const uploadZipFile = async (
   formData.append('file', file);
   formData.append('process', 'true'); // Always process documents from zip
   formData.append('generate_embeddings', generateEmbeddings ? 'true' : 'false');
-  
+
   console.log('Uploading zip file:', { filename: file.name, size: file.size, generateEmbeddings });
   const response = await post<any>('/documents/upload-zip', formData, {
     headers: {
@@ -252,7 +290,7 @@ export const uploadZipFile = async (
 
   return {
     success: true,
-    message: response.data?.message || 'Zip file uploaded successfully'
+    message: response.data?.message || 'Zip file uploaded successfully',
   };
 };
 
@@ -264,28 +302,35 @@ export const importGitHubRepository = async (
   backgroundProcessing: boolean = false,
   refresh: boolean = false
 ): Promise<{ success?: boolean; error?: string; message?: string; imported_count?: number }> => {
-  console.log('Importing GitHub repository:', { repoUrl, branch, fileTypes, backgroundProcessing, refresh });
-  
+  console.log('Importing GitHub repository:', {
+    repoUrl,
+    branch,
+    fileTypes,
+    backgroundProcessing,
+    refresh,
+  });
+
   // If refresh is true, first delete any existing documents from this repository
   if (refresh) {
     try {
       // Get all documents
       const { documents } = await getDocuments();
-      
+
       if (documents && documents.items) {
         // Find documents from this repository
-        const repoDocuments = documents.items.filter(doc =>
-          doc.meta_data &&
-          doc.meta_data.source === 'github' &&
-          doc.meta_data.repository &&
-          doc.meta_data.repository.includes(repoUrl.split('/').slice(-2).join('/'))
+        const repoDocuments = documents.items.filter(
+          (doc) =>
+            doc.meta_data &&
+            doc.meta_data.source === 'github' &&
+            doc.meta_data.repository &&
+            doc.meta_data.repository.includes(repoUrl.split('/').slice(-2).join('/'))
         );
-        
+
         // Delete each document
         for (const doc of repoDocuments) {
           await deleteDocument(doc.id);
         }
-        
+
         console.log(`Deleted ${repoDocuments.length} existing documents from repository`);
       }
     } catch (err) {
@@ -293,13 +338,13 @@ export const importGitHubRepository = async (
       // Continue with import even if deletion fails
     }
   }
-  
+
   // Import the repository
   const response = await post<any>('/documents/github', {
     repo_url: repoUrl,
     branch,
     file_types: fileTypes,
-    background_processing: backgroundProcessing
+    background_processing: backgroundProcessing,
   });
 
   console.log('GitHub import response:', response);
@@ -312,7 +357,7 @@ export const importGitHubRepository = async (
     return {
       success: true,
       message: response.data.message,
-      imported_count: response.data.imported_count
+      imported_count: response.data.imported_count,
     };
   }
 

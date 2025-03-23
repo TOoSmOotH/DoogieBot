@@ -17,7 +17,9 @@ export const getRAGStatus = async (): Promise<{ stats?: RAGStats; error?: string
 /**
  * Build or rebuild RAG indexes
  */
-export const buildIndexes = async (options: RAGBuildOptions): Promise<{ result?: RAGBuildResult; error?: string }> => {
+export const buildIndexes = async (
+  options: RAGBuildOptions
+): Promise<{ result?: RAGBuildResult; error?: string }> => {
   const response = await post<RAGBuildResult>('/rag/build-indexes', options);
 
   if (response.error) {
@@ -36,7 +38,7 @@ export const toggleRAGComponent = async (
 ): Promise<{ success?: boolean; error?: string }> => {
   const response = await post('/rag/toggle-component', {
     component,
-    enabled
+    enabled,
   });
 
   if (response.error) {
@@ -46,16 +48,16 @@ export const toggleRAGComponent = async (
 };
 
 /**
-* Delete all document chunks from the database
-*/
+ * Delete all document chunks from the database
+ */
 export const deleteAllChunks = async (): Promise<{ success?: boolean; error?: string }> => {
-const response = await post('/rag/delete-all-chunks');
+  const response = await post('/rag/delete-all-chunks');
 
-if (response.error) {
-  return { error: response.error };
-}
+  if (response.error) {
+    return { error: response.error };
+  }
 
-return { success: true };
+  return { success: true };
 };
 
 /**
@@ -75,7 +77,9 @@ export const rebuildGraphRAG = async (): Promise<{ success?: boolean; error?: st
 /**
  * Process all documents for RAG
  */
-export const processAllDocuments = async (config?: any): Promise<{ success?: boolean; error?: string }> => {
+export const processAllDocuments = async (
+  config?: any
+): Promise<{ success?: boolean; error?: string }> => {
   const response = await post('/rag/process-all', config);
 
   if (response.error) {
@@ -107,7 +111,7 @@ export const retrieveDocuments = async (
     use_faiss: options?.useFAISS !== undefined ? options.useFAISS : null,
     use_graph: options?.useGraph !== undefined ? options.useGraph : null,
     rerank: options?.rerank !== undefined ? options.rerank : true,
-    fast_mode: true
+    fast_mode: true,
   };
 
   const response = await post<any[]>('/rag/retrieve', retrieveOptions);
@@ -133,9 +137,11 @@ type ChunkInfo = {
   created_at: string;
 };
 
-export const getChunkInfo = async (chunkId: string): Promise<{
+export const getChunkInfo = async (
+  chunkId: string
+): Promise<{
   info?: ChunkInfo;
-  error?: string
+  error?: string;
 }> => {
   try {
     console.log(`Fetching chunk info for ${chunkId}`);
@@ -143,13 +149,13 @@ export const getChunkInfo = async (chunkId: string): Promise<{
 
     if (response.error) {
       // Handle specific error cases
-      if (response.error.includes("404") || response.error.includes("not found")) {
+      if (response.error.includes('404') || response.error.includes('not found')) {
         console.warn(`Chunk ${chunkId} not found in database`);
         return {
-          error: `Chunk not found in database. This may happen if documents have been deleted or reprocessed since this chat was created.`
+          error: `Chunk not found in database. This may happen if documents have been deleted or reprocessed since this chat was created.`,
         };
       }
-      
+
       console.error(`Error fetching chunk info: ${response.error}`);
       return { error: response.error };
     }
@@ -159,7 +165,7 @@ export const getChunkInfo = async (chunkId: string): Promise<{
   } catch (error) {
     console.error(`Exception fetching chunk info: ${error}`);
     return {
-      error: `Failed to retrieve chunk information. This may happen if documents have been deleted or reprocessed since this chat was created.`
+      error: `Failed to retrieve chunk information. This may happen if documents have been deleted or reprocessed since this chat was created.`,
     };
   }
 };

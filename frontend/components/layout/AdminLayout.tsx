@@ -51,9 +51,7 @@ const AdminLayout = ({
           </nav>
         </aside>
         <div className="flex-1">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            {children}
-          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">{children}</div>
         </div>
       </div>
     </Layout>

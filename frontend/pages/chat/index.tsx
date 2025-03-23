@@ -11,7 +11,14 @@ import { Input } from '@/components/ui/Input';
 import { Card, CardContent } from '@/components/ui/Card';
 import { useAuth } from '@/contexts/AuthContext';
 import { Chat, Message, Document } from '@/types';
-import { getChats, createChat, getChat, streamMessage, deleteChat, submitFeedback } from '@/services/chat';
+import {
+  getChats,
+  createChat,
+  getChat,
+  streamMessage,
+  deleteChat,
+  submitFeedback,
+} from '@/services/chat';
 import { getDocument } from '@/services/document';
 import { getChunkInfo } from '@/services/rag';
 import { getApiUrl } from '@/services/api';
@@ -19,35 +26,37 @@ import { parseThinkTags } from '@/utils/thinkTagParser';
 
 // Document References component
 // Cache for document information to avoid redundant API calls
-const chunkInfoCache: { [key: string]: {
-  documentId: string,
-  documentTitle: string,
-  loading: boolean,
-  error: boolean
-} } = {};
+const chunkInfoCache: {
+  [key: string]: {
+    documentId: string;
+    documentTitle: string;
+    loading: boolean;
+    error: boolean;
+  };
+} = {};
 
 const DocumentReferences = ({ documentIds }: { documentIds: string[] }) => {
   const [chunkInfo, setChunkInfo] = useState<{
     [key: string]: {
-      documentId: string,
-      documentTitle: string,
-      loading: boolean,
-      error: boolean
-    }
+      documentId: string;
+      documentTitle: string;
+      loading: boolean;
+      error: boolean;
+    };
   }>({});
-  
+
   useEffect(() => {
     // Initialize state with cached values or defaults
     const initialState: {
       [key: string]: {
-        documentId: string,
-        documentTitle: string,
-        loading: boolean,
-        error: boolean
-      }
+        documentId: string;
+        documentTitle: string;
+        loading: boolean;
+        error: boolean;
+      };
     } = {};
-    
-    documentIds.forEach(chunkId => {
+
+    documentIds.forEach((chunkId) => {
       if (chunkInfoCache[chunkId]) {
         // Use cached value if available
         initialState[chunkId] = chunkInfoCache[chunkId];
@@ -57,26 +66,26 @@ const DocumentReferences = ({ documentIds }: { documentIds: string[] }) => {
           documentId: '',
           documentTitle: '',
           loading: true,
-          error: false
+          error: false,
         };
-        
+
         // Fetch chunk information
         getChunkInfo(chunkId)
           .then(({ info, error }) => {
             // Log the response for debugging
             console.log(`Chunk info for ${chunkId}:`, { info, error });
-            
+
             if (info) {
               // Update cache and state with document info
               const chunkData = {
                 documentId: info.document_id,
                 documentTitle: info.document_title,
                 loading: false,
-                error: false
+                error: false,
               };
               console.log(`Setting chunk data for ${chunkId}:`, chunkData);
               chunkInfoCache[chunkId] = chunkData;
-              setChunkInfo(prev => ({ ...prev, [chunkId]: chunkData }));
+              setChunkInfo((prev) => ({ ...prev, [chunkId]: chunkData }));
             } else {
               // Handle error
               console.error(`Error getting chunk info for ${chunkId}:`, error);
@@ -84,10 +93,10 @@ const DocumentReferences = ({ documentIds }: { documentIds: string[] }) => {
                 documentId: '',
                 documentTitle: '',
                 loading: false,
-                error: true
+                error: true,
               };
               chunkInfoCache[chunkId] = chunkData;
-              setChunkInfo(prev => ({ ...prev, [chunkId]: chunkData }));
+              setChunkInfo((prev) => ({ ...prev, [chunkId]: chunkData }));
             }
           })
           .catch((err) => {
@@ -97,25 +106,30 @@ const DocumentReferences = ({ documentIds }: { documentIds: string[] }) => {
               documentId: '',
               documentTitle: '',
               loading: false,
-              error: true
+              error: true,
             };
             chunkInfoCache[chunkId] = chunkData;
-            setChunkInfo(prev => ({ ...prev, [chunkId]: chunkData }));
+            setChunkInfo((prev) => ({ ...prev, [chunkId]: chunkData }));
           });
       }
     });
-    
+
     setChunkInfo(initialState);
   }, [documentIds]);
-  
+
   return (
     <div>
       <ul className="list-disc list-inside mb-2">
         {documentIds.map((chunkId, i) => {
           // Format the chunk ID for display
           const shortId = chunkId.length > 12 ? `${chunkId.substring(0, 8)}...` : chunkId;
-          const info = chunkInfo[chunkId] || { documentId: '', documentTitle: '', loading: true, error: false };
-          
+          const info = chunkInfo[chunkId] || {
+            documentId: '',
+            documentTitle: '',
+            loading: true,
+            error: false,
+          };
+
           return (
             <li key={chunkId} className="text-gray-600 dark:text-gray-400 truncate mb-1">
               <span className="font-medium">Document {i + 1}:</span>{' '}
@@ -156,7 +170,8 @@ const DocumentReferences = ({ documentIds }: { documentIds: string[] }) => {
         })}
       </ul>
       <p className="text-xs text-gray-500 dark:text-gray-500 italic">
-        Note: These IDs refer to document chunks used by the RAG system. The system will attempt to retrieve the original document titles, but some chunks may no longer exist in the database.
+        Note: These IDs refer to document chunks used by the RAG system. The system will attempt to
+        retrieve the original document titles, but some chunks may no longer exist in the database.
       </p>
     </div>
   );
@@ -170,7 +185,7 @@ const FeedbackButton = ({
   type,
   label,
   onClick,
-  icon
+  icon,
 }: {
   messageId: string;
   type: FeedbackType;
@@ -192,29 +207,24 @@ const FeedbackButton = ({
 );
 
 const MessageContent = ({ content, message }: { content: string; message: Message }) => {
-  const [collapsedThinkTags, setCollapsedThinkTags] = useState<{[key: number]: boolean}>({});
+  const [collapsedThinkTags, setCollapsedThinkTags] = useState<{ [key: number]: boolean }>({});
   // Parse think tags using memoization to avoid unnecessary re-parsing
   const parts = useMemo(() => parseThinkTags(content), [content]);
 
   // Toggle think tag collapse state
   const toggleThinkTag = (index: number) => {
-    setCollapsedThinkTags(prev => ({
+    setCollapsedThinkTags((prev) => ({
       ...prev,
-      [index]: !prev[index]
+      [index]: !prev[index],
     }));
   };
 
   // Custom components for ReactMarkdown
   const components = {
-    code({node, inline, className, children, ...props}: any) {
+    code({ node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
       return !inline && match ? (
-        <SyntaxHighlighter
-          style={vscDarkPlus}
-          language={match[1]}
-          PreTag="div"
-          {...props}
-        >
+        <SyntaxHighlighter style={vscDarkPlus} language={match[1]} PreTag="div" {...props}>
           {String(children).replace(/\n$/, '')}
         </SyntaxHighlighter>
       ) : (
@@ -222,7 +232,7 @@ const MessageContent = ({ content, message }: { content: string; message: Messag
           {children}
         </code>
       );
-    }
+    },
   };
 
   return (
@@ -244,15 +254,25 @@ const MessageContent = ({ content, message }: { content: string; message: Messag
                     <span>Thinking</span>
                   </div>
                 )}
-                
+
                 {(!part.isComplete || !collapsedThinkTags[index]) && (
                   <div className="think-tag-content bg-gray-50 dark:bg-gray-800/50 p-2 rounded border border-gray-200 dark:border-gray-700">
-                    <div className={message.role === 'user' ? 'user-message-content' : 'assistant-message-content'}>
+                    <div
+                      className={
+                        message.role === 'user'
+                          ? 'user-message-content'
+                          : 'assistant-message-content'
+                      }
+                    >
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         rehypePlugins={[rehypeRaw]}
                         components={components}
-                        className={message.role === 'user' ? 'user-message-markdown' : 'assistant-message-markdown'}
+                        className={
+                          message.role === 'user'
+                            ? 'user-message-markdown'
+                            : 'assistant-message-markdown'
+                        }
                       >
                         {part.content}
                       </ReactMarkdown>
@@ -261,13 +281,19 @@ const MessageContent = ({ content, message }: { content: string; message: Messag
                 )}
               </div>
             ) : (
-              <div className={message.role === 'user' ? 'user-message-content' : 'assistant-message-content'}>
+              <div
+                className={
+                  message.role === 'user' ? 'user-message-content' : 'assistant-message-content'
+                }
+              >
                 <ReactMarkdown
                   key={index}
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
                   components={components}
-                  className={message.role === 'user' ? 'user-message-markdown' : 'assistant-message-markdown'}
+                  className={
+                    message.role === 'user' ? 'user-message-markdown' : 'assistant-message-markdown'
+                  }
                 >
                   {part.content}
                 </ReactMarkdown>
@@ -302,7 +328,7 @@ export default function ChatPage() {
   // Load chats function
   const loadChats = async () => {
     if (!isAuthenticated) return;
-    
+
     try {
       const { chats, error } = await getChats();
       if (chats) {
@@ -331,10 +357,10 @@ export default function ChatPage() {
   // Load chat if ID is in URL
   useEffect(() => {
     const chatId = router.query.id ? String(router.query.id) : null;
-    
+
     const loadChat = async () => {
       if (!chatId || !isAuthenticated) return;
-      
+
       try {
         const { chat, error } = await getChat(chatId);
         if (chat) {
@@ -357,10 +383,10 @@ export default function ChatPage() {
     const scrollTimeout = setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({
         behavior: isStreaming ? 'auto' : 'smooth',
-        block: 'end'
+        block: 'end',
       });
     }, 10);
-    
+
     return () => clearTimeout(scrollTimeout);
   }, [currentChat?.messages, isStreaming]);
 
@@ -382,14 +408,14 @@ export default function ChatPage() {
     console.log('Deleting chat:', chatId);
     setIsLoading(true);
     setError(null);
-    
+
     try {
       // Optimistically remove the chat from the UI
-      setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
-      
+      setChats((prevChats) => prevChats.filter((chat) => chat.id !== chatId));
+
       const { success, error } = await deleteChat(chatId);
       console.log('Delete response:', { success, error });
-      
+
       if (success) {
         console.log('Delete successful, updating UI...');
         if (currentChat?.id === chatId) {
@@ -416,7 +442,11 @@ export default function ChatPage() {
     }
   };
 
-  const handleFeedback = async (messageId: string, feedback: FeedbackType, feedbackText?: string) => {
+  const handleFeedback = async (
+    messageId: string,
+    feedback: FeedbackType,
+    feedbackText?: string
+  ) => {
     try {
       const { message: updatedMessage, error: feedbackError } = await submitFeedback(
         String(currentChat?.id),
@@ -430,18 +460,15 @@ export default function ChatPage() {
       }
 
       // Update the message in the UI
-      setCurrentChat(prev => {
+      setCurrentChat((prev) => {
         if (!prev) return null;
         return {
           ...prev,
-          messages: prev.messages?.map(msg =>
-            String(msg.id) === messageId
-              ? { ...msg, feedback, feedback_text: feedbackText }
-              : msg
-          )
+          messages: prev.messages?.map((msg) =>
+            String(msg.id) === messageId ? { ...msg, feedback, feedback_text: feedbackText } : msg
+          ),
         };
       });
-
     } catch (err) {
       console.error('Error submitting feedback:', err);
       setError('Failed to submit feedback');
@@ -450,7 +477,7 @@ export default function ChatPage() {
 
   // Keep track of active EventSource to prevent multiple connections
   const eventSourceRef = useRef<EventSource | null>(null);
-  
+
   // Function to close any existing EventSource
   const closeEventSource = useCallback(() => {
     if (eventSourceRef.current) {
@@ -459,7 +486,7 @@ export default function ChatPage() {
       eventSourceRef.current = null;
     }
   }, []);
-  
+
   // Clean up EventSource on unmount
   useEffect(() => {
     return () => {
@@ -471,7 +498,7 @@ export default function ChatPage() {
   const setupEventSource = (chatId: string, content: string) => {
     // Close any existing EventSource
     closeEventSource();
-    
+
     // Get token for authentication
     const token = localStorage.getItem('token');
     if (!token) {
@@ -484,13 +511,13 @@ export default function ChatPage() {
       `/chats/${chatId}/stream?content=${encodeURIComponent(content)}&token=${encodeURIComponent(token)}&_=${timestamp}`,
       false
     );
-    
+
     console.log('Setting up EventSource connection to:', streamUrl);
-    
+
     // Create EventSource
     const eventSource = new EventSource(streamUrl);
     eventSourceRef.current = eventSource;
-    
+
     return eventSource;
   };
 
@@ -499,9 +526,9 @@ export default function ChatPage() {
     try {
       // Log only basic info to reduce console noise
       console.log('Received event data:', event.data.substring(0, 50) + '...');
-      
+
       const data = JSON.parse(event.data);
-      
+
       // Check for error condition
       if (data.error) {
         setError(data.content || 'An error occurred during streaming');
@@ -509,14 +536,14 @@ export default function ChatPage() {
         setIsStreaming(false);
         return;
       }
-      
+
       // Force a refresh of the current chat to ensure we have the latest state
       setCurrentChat((prev) => {
         if (!prev) return prev;
         // Find the last assistant message (searching from the end of the array)
         const messages = prev.messages || [];
         let lastAssistantIndex = -1;
-        
+
         // Search from the end of the array to find the last assistant message
         for (let i = messages.length - 1; i >= 0; i--) {
           if (messages[i].role === 'assistant') {
@@ -524,12 +551,12 @@ export default function ChatPage() {
             break;
           }
         }
-        
+
         if (lastAssistantIndex === -1) return prev;
-        
+
         // Create a new messages array with the updated content
         const updatedMessages = [...messages];
-        
+
         // Update the assistant message with the new content from the server
         // The backend sends the full content in each chunk, not just the delta
         updatedMessages[lastAssistantIndex] = {
@@ -538,25 +565,25 @@ export default function ChatPage() {
           tokens: data.tokens,
           tokens_per_second: data.tokens_per_second,
           model: data.model,
-          provider: data.provider
+          provider: data.provider,
         };
-        
+
         // Return a new chat object with the updated messages
         return {
           ...prev,
-          messages: updatedMessages
+          messages: updatedMessages,
         };
       });
-      
+
       // If this is the final chunk, complete the process
       if (data.done) {
         console.log('Received final chunk, closing EventSource');
         closeEventSource();
         setIsStreaming(false);
-        
+
         // Refresh the chat list to ensure the chat appears with the correct title
         loadChats();
-        
+
         // Refresh the current chat to ensure we have the latest messages from the database
         if (currentChat) {
           console.log('Refreshing current chat from database');
@@ -585,20 +612,20 @@ export default function ChatPage() {
   // Handle EventSource errors
   const handleEventError = (error: Event) => {
     console.error('EventSource error:', error);
-    
+
     // Get the current state of the EventSource
     const eventSource = eventSourceRef.current;
     if (!eventSource) return;
-    
+
     console.error('EventSource readyState:', eventSource.readyState);
-    
+
     let errorMessage = 'Connection error during streaming.';
-    
+
     // Simple error handling without complex retry logic
     if (eventSource.readyState === EventSource.CLOSED) {
       errorMessage = 'Connection closed unexpectedly. Please try again.';
     }
-    
+
     setError(errorMessage);
     closeEventSource();
     setIsStreaming(false);
@@ -619,12 +646,12 @@ export default function ChatPage() {
       }
       chat = newChat;
       setCurrentChat(chat);
-      
+
       // Ensure the URL is updated with the new chat ID
       router.push(`/chat?id=${chat.id}`, undefined, { shallow: true });
-      
+
       // Wait a moment for the router to update
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
 
     // Add user message to UI immediately
@@ -636,7 +663,7 @@ export default function ChatPage() {
       created_at: new Date().toISOString(),
     };
 
-    setCurrentChat(prev => ({
+    setCurrentChat((prev) => ({
       ...(prev || chat),
       messages: (prev || chat).messages ? [...(prev || chat).messages, userMessage] : [userMessage],
     }));
@@ -645,7 +672,7 @@ export default function ChatPage() {
     setMessage('');
     setIsStreaming(true);
     setError(null);
-    
+
     // Create placeholder for assistant response
     const assistantMessage: Message = {
       id: Date.now() + 1,
@@ -655,23 +682,25 @@ export default function ChatPage() {
       created_at: new Date().toISOString(),
     };
 
-    setCurrentChat(prev => ({
+    setCurrentChat((prev) => ({
       ...(prev || chat),
-      messages: (prev || chat).messages ? [...(prev || chat).messages, assistantMessage] : [assistantMessage],
+      messages: (prev || chat).messages
+        ? [...(prev || chat).messages, assistantMessage]
+        : [assistantMessage],
     }));
-    
+
     // Force scroll to bottom immediately after adding the assistant message placeholder
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({
         behavior: 'auto',
-        block: 'end'
+        block: 'end',
       });
     }, 10);
 
     try {
       // Refresh chat list to show new chat with correct title
       await loadChats();
-      
+
       // Ensure we have the latest chat state
       if (!currentChat || currentChat.id !== chat.id) {
         const { chat: refreshedChat } = await getChat(chat.id);
@@ -684,10 +713,10 @@ export default function ChatPage() {
           setCurrentChat(refreshedChat);
         }
       }
-      
+
       // Set up EventSource
       const eventSource = setupEventSource(chat.id, trimmedMessage);
-      
+
       // Set up event handlers
       eventSource.onmessage = handleEventMessage;
       eventSource.onerror = handleEventError;
@@ -714,46 +743,54 @@ export default function ChatPage() {
         {/* Chat Sidebar */}
         <div className="w-64 bg-white dark:bg-gray-800 rounded-lg shadow-md mr-4 overflow-y-auto flex-shrink-0">
           <div className="p-4">
-            <Button
-              onClick={handleNewChat}
-              className="w-full mb-4"
-            >
+            <Button onClick={handleNewChat} className="w-full mb-4">
               New Chat
             </Button>
             <div className="space-y-2">
-              {chats && chats.length > 0 ? (
-                chats.map((chat) => (
-                  <div
-                    key={chat.id}
-                    className={`flex items-center justify-between p-2 rounded-md ${
-                      currentChat?.id === chat.id
-                        ? 'bg-primary-100 dark:bg-primary-900 text-primary-900 dark:text-primary-100'
-                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
+              {chats && chats.length > 0
+                ? chats.map((chat) => (
                     <div
-                      onClick={() => handleSelectChat(chat)}
-                      className="flex-grow cursor-pointer truncate"
+                      key={chat.id}
+                      className={`flex items-center justify-between p-2 rounded-md ${
+                        currentChat?.id === chat.id
+                          ? 'bg-primary-100 dark:bg-primary-900 text-primary-900 dark:text-primary-100'
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
                     >
-                      <p className="truncate text-sm">{chat.title}</p>
+                      <div
+                        onClick={() => handleSelectChat(chat)}
+                        className="flex-grow cursor-pointer truncate"
+                      >
+                        <p className="truncate text-sm">{chat.title}</p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Are you sure you want to delete this chat?')) {
+                            handleDeleteChat(chat.id);
+                          }
+                        }}
+                        className="ml-2 p-1 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
+                        title="Delete chat"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('Are you sure you want to delete this chat?')) {
-                          handleDeleteChat(chat.id);
-                        }
-                      }}
-                      className="ml-2 p-1 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
-                      title="Delete chat"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                ))
-              ) : null}
+                  ))
+                : null}
               {isLoading && <p className="text-sm text-gray-500">Loading chats...</p>}
               {!isLoading && (!chats || chats.length === 0) && (
                 <p className="text-sm text-gray-500">No chats yet. Start a new conversation!</p>
@@ -778,10 +815,7 @@ export default function ChatPage() {
                     <div className="font-semibold mb-2">
                       {msg.role === 'user' ? 'You' : 'Doogie'}
                     </div>
-                    <MessageContent
-                      content={msg.content}
-                      message={msg}
-                    />
+                    <MessageContent content={msg.content} message={msg} />
                     {/* Feedback UI - positioned outside the chat bubble border */}
                     {msg.role === 'assistant' && !msg.feedback && (
                       <div className="absolute right-0 -bottom-6 flex flex-row gap-1 bg-white dark:bg-gray-800 px-2 py-1 rounded shadow-sm">
@@ -790,7 +824,12 @@ export default function ChatPage() {
                           className="p-1 text-gray-400 hover:text-green-500 transition-colors duration-200"
                           title="Helpful"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
                             <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
                           </svg>
                         </button>
@@ -799,7 +838,12 @@ export default function ChatPage() {
                           className="p-1 text-gray-400 hover:text-red-500 transition-colors duration-200"
                           title="Not helpful"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
                             <path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667v-5.43a2 2 0 00-1.105-1.79l-.05-.025A4 4 0 0011.055 2H5.64a2 2 0 00-1.962 1.608l-1.2 6A2 2 0 004.44 12H8v4a2 2 0 002 2 1 1 0 001-1v-.667a4 4 0 01.8-2.4l1.4-1.866a4 4 0 00.8-2.4z" />
                           </svg>
                         </button>
@@ -815,8 +859,17 @@ export default function ChatPage() {
                           className="p-1 text-gray-400 hover:text-blue-500 transition-colors duration-200"
                           title="View message info"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
                           </svg>
                         </button>
                       </div>
@@ -824,7 +877,9 @@ export default function ChatPage() {
                     {/* Feedback status */}
                     {msg.role === 'assistant' && msg.feedback && (
                       <div className="absolute right-0 -bottom-6 flex items-center gap-1 bg-white dark:bg-gray-800 px-2 py-1 rounded shadow-sm">
-                        <span className={`text-sm ${msg.feedback === 'positive' ? 'text-green-500' : 'text-red-500'}`}>
+                        <span
+                          className={`text-sm ${msg.feedback === 'positive' ? 'text-green-500' : 'text-red-500'}`}
+                        >
                           {msg.feedback === 'positive' ? '👍' : '👎'}
                         </span>
                         {msg.feedback_text && (
@@ -844,49 +899,73 @@ export default function ChatPage() {
                           className="p-1 text-gray-400 hover:text-blue-500 transition-colors duration-200"
                           title="View message info"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
                           </svg>
                         </button>
                       </div>
                     )}
-                    
+
                     {/* Info Panel - Hidden by default */}
                     {msg.role === 'assistant' && (
-                      <div id={`info-panel-${msg.id}`} className="hidden mt-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-md border border-gray-200 dark:border-gray-700 text-xs">
-                        <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Message Information</h4>
-                        
+                      <div
+                        id={`info-panel-${msg.id}`}
+                        className="hidden mt-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-md border border-gray-200 dark:border-gray-700 text-xs"
+                      >
+                        <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                          Message Information
+                        </h4>
+
                         {/* Performance Stats */}
                         <div className="mb-3">
-                          <h5 className="font-medium text-gray-600 dark:text-gray-400 mb-1">Performance</h5>
+                          <h5 className="font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            Performance
+                          </h5>
                           <div className="grid grid-cols-2 gap-2">
                             {msg.tokens && (
                               <div>
-                                <span className="text-gray-500 dark:text-gray-500">Tokens:</span> {msg.tokens}
+                                <span className="text-gray-500 dark:text-gray-500">Tokens:</span>{' '}
+                                {msg.tokens}
                               </div>
                             )}
                             {msg.tokens_per_second && (
                               <div>
-                                <span className="text-gray-500 dark:text-gray-500">Tokens/sec:</span> {msg.tokens_per_second.toFixed(2)}
+                                <span className="text-gray-500 dark:text-gray-500">
+                                  Tokens/sec:
+                                </span>{' '}
+                                {msg.tokens_per_second.toFixed(2)}
                               </div>
                             )}
                             {msg.model && (
                               <div>
-                                <span className="text-gray-500 dark:text-gray-500">Model:</span> {msg.model}
+                                <span className="text-gray-500 dark:text-gray-500">Model:</span>{' '}
+                                {msg.model}
                               </div>
                             )}
                             {msg.provider && (
                               <div>
-                                <span className="text-gray-500 dark:text-gray-500">Provider:</span> {msg.provider}
+                                <span className="text-gray-500 dark:text-gray-500">Provider:</span>{' '}
+                                {msg.provider}
                               </div>
                             )}
                           </div>
                         </div>
-                        
+
                         {/* Document References */}
                         {msg.context_documents && msg.context_documents.length > 0 && (
                           <div>
-                            <h5 className="font-medium text-gray-600 dark:text-gray-400 mb-1">Referenced Documents</h5>
+                            <h5 className="font-medium text-gray-600 dark:text-gray-400 mb-1">
+                              Referenced Documents
+                            </h5>
                             <DocumentReferences documentIds={msg.context_documents} />
                           </div>
                         )}
