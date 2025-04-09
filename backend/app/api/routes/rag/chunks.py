@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 from app.db.base import get_db
 from app.models.user import User
-from app.models.document import DocumentChunk, GraphNode, GraphEdge, Document
+from app.models.document import DocumentChunk, Document
+from app.models.graph import GraphNode, GraphEdge
 from app.rag.singleton import rag_singleton
 from app.utils.deps import get_current_admin_user, get_current_user
 

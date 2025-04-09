@@ -1,29 +1,51 @@
 # Stage 0: Base image
-FROM python:3.12-slim AS base
+FROM python:3.13-slim AS base
 
 # User configuration with defaults
 ARG USER_ID=1000
 ARG GROUP_ID=1000
+ARG DOCKER_GID=999 # Use 999 as a common default, pass from compose if different
 ARG USER_NAME=appuser
 
-# Install minimal system dependencies and UV
+# Install minimal system dependencies, UV, and Docker CLI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
     curl \
     git \
     swig \
+    apt-transport-https \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    sqlite3 \
+    jq \
+    # Docker CLI install moved to specific stages (dev/prod) where needed
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     # Install UV package manager
     && curl -LsSf https://astral.sh/uv/install.sh | sh \
     && mv /root/.local/bin/uv /usr/local/bin/uv
 
-# Create non-root user with configurable UID/GID
-RUN groupadd -g ${GROUP_ID} ${USER_NAME} && \
+# Create non-root user with configurable UID/GID (passed from docker-compose)
+RUN groupadd -g ${GROUP_ID} ${USER_NAME} || true && \
     useradd -u ${USER_ID} -g ${GROUP_ID} -s /bin/bash -m ${USER_NAME} && \
     mkdir -p /app && \
     chown -R ${USER_ID}:${GROUP_ID} /app
+
+# --- MODIFIED Docker Group Setup ---
+# Create a group with the specific GID passed from the build argument
+# This group needs to match the GID of the host's docker group to access the socket
+RUN DOCKER_GROUP_NAME=$(getent group ${DOCKER_GID} | cut -d: -f1) && \
+    if [ -n "$DOCKER_GROUP_NAME" ]; then \
+        echo "Adding user ${USER_NAME} to existing group ${DOCKER_GROUP_NAME} (GID: ${DOCKER_GID})" && \
+        usermod -aG ${DOCKER_GROUP_NAME} ${USER_NAME}; \
+    else \
+        echo "Creating group 'docker' with GID ${DOCKER_GID} and adding user ${USER_NAME}" && \
+        groupadd -g ${DOCKER_GID} docker && \
+        usermod -aG docker ${USER_NAME}; \
+    fi
+# --- END MODIFIED Docker Group Setup ---
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -41,6 +63,7 @@ WORKDIR /app
 COPY backend/pyproject.toml backend/requirements.txt /app/backend/
 
 # Install Python dependencies using UV
+ENV UV_HTTP_TIMEOUT=300
 RUN cd /app/backend && \
     uv venv /app/.venv && \
     uv pip install -e . && \
@@ -66,8 +89,7 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./
 # Install frontend dependencies
 RUN pnpm install --frozen-lockfile # Use --frozen-lockfile for reliability
 
-# Copy the rest of the frontend code
-# Copy necessary source files and directories explicitly
+# Copy the rest of the frontend code AFTER installing dependencies
 COPY frontend/next.config.js ./
 COPY frontend/postcss.config.js ./
 COPY frontend/tailwind.config.js ./
@@ -106,53 +128,102 @@ CMD ["backend/tests"]
 # Stage 4: Development stage
 FROM base AS development
 
-# Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
+# Install Node.js and Docker CLI (needed for MCP)
+RUN apt-get update && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y nodejs docker-ce-cli && \
+    # pnpm will be installed by entrypoint.sh if needed
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    npm install -g pnpm
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Create virtual environment and install development dependencies with UV
-RUN uv venv /app/.venv && \
-    mkdir -p /app/backend && \
-    chown -R ${USER_ID}:${GROUP_ID} /app/.venv
+# Create necessary directories early
+RUN mkdir -p /app/backend \
+             /app/frontend \
+             /app/frontend/node_modules \
+             /app/frontend/.next \
+             /app/.pnpm-store \
+             /app/backend/tests
 
-# Copy pyproject.toml for dependency installation
-COPY backend/pyproject.toml /app/backend/
+# Create virtual environment
+RUN uv venv /app/.venv
 
-# Install development tools with UV
+# Copy backend dependency files first
+COPY backend/pyproject.toml backend/requirements.txt backend/uv.lock* /app/backend/
+# Install backend dev dependencies BEFORE copying all source code
+ENV UV_HTTP_TIMEOUT=300
 RUN cd /app/backend && \
-    uv pip install -e ".[dev]"
+    uv pip install -e ".[dev]" && \
+    echo "--- Contents of /app/.venv/bin after dev install ---" && \
+    ls -la /app/.venv/bin && \
+    echo "--- End of /app/.venv/bin contents ---"
 
-# Create test directories and config files
-RUN mkdir -p /app/backend/tests && \
-    echo 'exclude_dirs: ["/venv", "/tests"]' > /app/backend/bandit.yaml
+# Copy frontend dependency files
+COPY frontend/package.json frontend/pnpm-lock.yaml /app/frontend/
 
 # Copy entrypoint scripts
 COPY entrypoint.sh /app/
 COPY entrypoint.prod.sh /app/
-RUN chmod +x /app/entrypoint.sh && \
-    chmod +x /app/entrypoint.prod.sh
+# Removed chmod +x, Docker handles execution via ENTRYPOINT/CMD
 
-# Ensure directories exist with correct permissions
-RUN mkdir -p /app/frontend/node_modules /app/frontend/.next && \
-    mkdir -p /app/.pnpm-store && \
-    chown -R ${USER_ID}:${GROUP_ID} /app
+# Copy the rest of the backend source code
+COPY backend /app/backend/
+
+# Copy the rest of the frontend source code (granular copy)
+COPY frontend/.prettierrc /app/frontend/
+COPY frontend/components.json /app/frontend/
+COPY frontend/next-env.d.ts /app/frontend/
+COPY frontend/next.config.js /app/frontend/
+COPY frontend/package.json /app/frontend/
+COPY frontend/pnpm-lock.yaml /app/frontend/
+COPY frontend/postcss.config.js /app/frontend/
+COPY frontend/tailwind.config.js /app/frontend/
+COPY frontend/tsconfig.json /app/frontend/
+COPY frontend/components /app/frontend/components/
+COPY frontend/contexts /app/frontend/contexts/
+COPY frontend/hooks /app/frontend/hooks/
+COPY frontend/pages /app/frontend/pages/
+COPY frontend/public /app/frontend/public/
+COPY frontend/services /app/frontend/services/
+COPY frontend/styles /app/frontend/styles/
+COPY frontend/types /app/frontend/types/
+COPY frontend/utils /app/frontend/utils/
+
+# Set ownership for the entire app directory before installing dependencies
+# This needs to happen *after* user/group are created with correct IDs
+RUN chown -R ${USER_ID}:${GROUP_ID} /app
+ # Backend dev dependencies already installed above for better caching
+
+ # Frontend dependencies will be installed by entrypoint.sh for dev consistency with bind mounts
+ # Install frontend dependencies (using pnpm install, should use lock file)
+# No need to run this here if using bind mounts for dev, but good for standalone image
+# RUN cd /app/frontend && pnpm install
+
+# Create config files (after backend code is copied)
+RUN echo 'exclude_dirs: ["/venv", "/tests"]' > /app/backend/bandit.yaml
 
 # Environment variables for development
 ENV NODE_ENV=development \
     FASTAPI_ENV=development \
-    PNPM_HOME=".local/share/pnpm" \
-    PATH="/app/.venv/bin:${PATH}"
+    # PNPM_HOME removed, using standard install path below
+    PATH="/app/.venv/bin:${PATH}" \
+    # MCP configuration
+    MCP_NETWORK=mcp-network \
+    MCP_DATA_DIR=/var/lib/doogie-chat/mcp \
+    MCP_ENABLE_DOCKER=true
 
 # Add pnpm to PATH
-ENV PATH="${PNPM_HOME}:${PATH}"
+# pnpm should be globally available in PATH from the curl install, no need for user-specific path mod
 
-# Switch to configured user
+# Ensure UV cache directory exists and has correct permissions BEFORE switching user
+RUN mkdir -p /app/.uv-cache && chown -R ${USER_ID}:${GROUP_ID} /app/.uv-cache
+
+# Switch to configured user AFTER all root operations (installations, chown) are done
 USER ${USER_ID}:${GROUP_ID}
 
 # Development-specific command
@@ -178,38 +249,51 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 # Set working directory
 WORKDIR /app
 
-# Install Node.js and pnpm
+# Install Node.js, pnpm, and Docker CLI (needed for MCP)
 RUN apt-get update && \
-    apt-get install -y nodejs npm && \
-    npm install -g pnpm && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y nodejs docker-ce-cli && \
+    curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/bash sh - && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Create virtual environment and install dependencies with UV
 RUN uv venv /app/.venv && \
-    mkdir -p /app/backend
+    mkdir -p /app/backend /app/frontend
 
-# Copy pyproject.toml for dependency installation
-COPY backend/pyproject.toml /app/backend/
-
-# Install dependencies with UV
+# Copy backend dependency files first
+COPY backend/pyproject.toml backend/requirements.txt backend/uv.lock* /app/backend/
+# Install backend production dependencies (no dev extras)
+# Copy necessary backend source code for runtime BEFORE installing dependencies
+COPY backend/app /app/backend/app
+# Install backend production dependencies (no dev extras)
+ENV UV_HTTP_TIMEOUT=300
 RUN cd /app/backend && \
     uv pip install -e .
 
-# Copy frontend build from builder
+# Copy frontend build artifacts from builder stage
 COPY --from=frontend-builder /app/frontend/.next /app/frontend/.next
 COPY --from=frontend-builder /app/frontend/public /app/frontend/public
 COPY --from=frontend-builder /app/frontend/node_modules /app/frontend/node_modules
+# Copy necessary frontend config files for runtime
 COPY frontend/package.json frontend/next.config.js /app/frontend/
 
-# Copy backend code
-COPY backend/ /app/backend/
+# (Backend source code copied earlier)
+COPY backend/main.py /app/backend/main.py
+COPY backend/alembic.ini /app/backend/alembic.ini
+COPY backend/alembic /app/backend/alembic
+# Add any other necessary top-level files/dirs from backend/ here if needed
+
+# Set ownership for backend AFTER copying source
 RUN chown -R ${USER_ID}:${GROUP_ID} /app/backend
 
-# Copy entrypoint scripts
-COPY entrypoint.prod.sh /app/
-RUN chmod +x /app/entrypoint.prod.sh && \
-    chown ${USER_ID}:${GROUP_ID} /app/entrypoint.prod.sh
+# Copy unified entrypoint script
+COPY entrypoint.sh /app/
+RUN chown ${USER_ID}:${GROUP_ID} /app/entrypoint.sh
+# Removed chmod +x, Docker handles execution via ENTRYPOINT/CMD
 
 # Ensure frontend build files have correct ownership
 RUN chown -R ${USER_ID}:${GROUP_ID} /app/frontend/.next && \
@@ -231,5 +315,5 @@ EXPOSE 3000 8000
 # Switch to configured user
 USER ${USER_ID}:${GROUP_ID}
 
-# Run the application
-ENTRYPOINT ["/app/entrypoint.prod.sh"]
+# Run the application using the unified entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]

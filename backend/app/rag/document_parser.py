@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 import json
 import markdown
-import PyPDF2
+import pypdf  # Replaced deprecated PyPDF2
 from docx import Document as DocxDocument
 import yaml
 
@@ -65,7 +65,7 @@ class DocumentParser:
         }
         
         with open(file_path, "rb") as f:
-            pdf = PyPDF2.PdfReader(f)
+            pdf = pypdf.PdfReader(f)
             metadata["pages"] = len(pdf.pages)
             
             # Extract document info

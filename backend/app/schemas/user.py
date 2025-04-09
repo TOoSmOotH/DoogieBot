@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 from app.models.user import UserRole, UserStatus
 
@@ -29,8 +29,7 @@ class UserInDBBase(UserBase):
     updated_at: datetime
     last_login: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Properties to return to client
 class User(UserInDBBase):
@@ -51,5 +50,4 @@ class UserResponse(BaseModel):
     updated_at: datetime
     last_login: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

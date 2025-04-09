@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.user import UserCreate, UserUpdate
 from app.utils.security import get_password_hash, verify_password, generate_uuid
-from datetime import datetime
+from datetime import datetime, UTC
 
 class UserService:
     @staticmethod
@@ -67,7 +67,7 @@ class UserService:
         for field, value in update_data.items():
             setattr(user, field, value)
         
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -96,7 +96,7 @@ class UserService:
     @staticmethod
     def update_last_login(db: Session, user: User) -> User:
         """Update the last login timestamp for a user."""
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(UTC)
         db.add(user)
         db.commit()
         db.refresh(user)

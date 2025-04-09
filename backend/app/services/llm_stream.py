@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import time
 from typing import List, Dict, Any, Optional, AsyncGenerator
 from sqlalchemy.orm import Session
 
@@ -22,7 +23,8 @@ async def stream_llm_response(
     context_documents: Optional[List[Dict[str, Any]]],
     system_prompt: Optional[str], # Added system_prompt
     model: Optional[str], # Added model
-    provider: Optional[str] # Added provider
+    provider: Optional[str], # Added provider
+    tools: Optional[List[Dict[str, Any]]] = None # <-- Add tools parameter
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Stream response from the LLM and save the final message.
@@ -38,6 +40,7 @@ async def stream_llm_response(
         system_prompt: The system prompt to use.
         model: The model name being used.
         provider: The provider name being used.
+        tools: Optional list of tool definitions to pass to the LLM.
 
     Yields:
         Chunks of the response.
@@ -68,6 +71,7 @@ async def stream_llm_response(
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": True,
+            "tools": tools, # <-- Pass tools if provided
         }
         # Conditionally add system_prompt for clients that support it as a separate argument
         if isinstance(chat_client, (AnthropicClient, GoogleGeminiClient)):
@@ -121,7 +125,9 @@ async def stream_llm_response(
 
             # Check if this is the final chunk based on the 'done' flag
             if chunk.get("done") is True:
-                logger.debug(f"Final chunk received (done=True) for chat {chat_id}")
+                logger.debug(f"Final chunk received (done=True) for chat {chat_id}. Processing final state.")
+                logger.debug(f"Raw final chunk data: {chunk}") # Log the entire final chunk
+
                 # Gather final metadata from this chunk
                 usage = chunk.get("usage", {})
                 prompt_tokens = usage.get("prompt_tokens", prompt_tokens)
@@ -129,8 +135,11 @@ async def stream_llm_response(
                 total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
                 tokens_per_second = chunk.get("tokens_per_second", 0.0)
                 finish_reason = chunk.get("finish_reason")
+                tool_calls = chunk.get("tool_calls") # Check for tool calls
                 current_model = chunk.get("model", current_model) # Update model if provided in final chunk
                 current_provider = chunk.get("provider", current_provider) # Update provider if provided
+
+                logger.debug(f"Final chunk details - Usage: {usage}, Finish Reason: {finish_reason}, Tool Calls: {tool_calls}")
 
                 # Accumulate any final delta content within the 'done' chunk
                 final_delta_content = chunk.get("content", "")
@@ -139,11 +148,12 @@ async def stream_llm_response(
                      logger.debug(f"Accumulated final delta content: '{final_delta_content[:50]}...'")
 
                 # Save the final accumulated message BEFORE breaking
-                logger.debug(f"Saving final message for chat {chat_id} after processing final chunk.")
-                # --- Add detailed logging ---
-                logger.info(f"Final chunk data for saving: tokens={total_tokens}, tps={tokens_per_second}, model={current_model}, provider={current_provider}")
-                logger.info(f"Context doc IDs: {[doc['id'] for doc in context_documents] if context_documents else None}")
-                # --- End detailed logging ---
+                logger.debug(f"Preparing to save final message for chat {chat_id} after processing final chunk.")
+                logger.debug(f"Final message content to save: '{full_content[:100]}...'")
+                logger.debug(f"Final metadata for saving: tokens={total_tokens}, tps={tokens_per_second}, model={current_model}, provider={current_provider}, finish_reason={finish_reason}")
+                logger.debug(f"Context doc IDs for saving: {[doc['id'] for doc in context_documents] if context_documents else None}")
+                # Note: Tool calls from the final chunk are not explicitly saved in ChatService.add_message here.
+                # The 'internal_final_state' chunk yielded *should* contain them for the background task.
                 ChatService.add_message(
                     db,
                     chat_id,
@@ -156,6 +166,48 @@ async def stream_llm_response(
                     context_documents=[doc["id"] for doc in context_documents] if context_documents else None,
                 )
                 logger.debug(f"Final message saved for chat {chat_id}")
+                
+                # Check if tool calls were detected in any chunk
+                # The tool_calls variable might be None even if tool calls were detected in delta chunks
+                # So we need to check if any tool calls were detected in the Ollama client
+                client_tool_calls = getattr(chat_client, 'detected_tool_calls', None)
+                
+                # Use either the final chunk tool_calls or the ones detected by the client
+                final_tool_calls = tool_calls or client_tool_calls
+                
+                # Log the tool calls for debugging
+                logger.debug(f"Final tool calls for internal_final_state: {final_tool_calls}")
+                
+                # Get the user_id from the chat_client
+                user_id = getattr(chat_client, 'user_id', None)
+                
+                # Generate internal_final_state chunk with the state needed for the background task
+                internal_state = {
+                    "full_content": full_content,
+                    "tool_call_occurred": bool(final_tool_calls),
+                    "final_tool_calls_list": final_tool_calls,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "finish_reason": finish_reason,
+                    "first_stream_yielded_final": True,
+                    "current_model": current_model,
+                    "current_provider": current_provider,
+                    "start_time": time.time(),  # Current time as a reference
+                    "user_id": user_id,
+                    "context_documents": context_documents,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "system_prompt": system_prompt,
+                    "original_messages": formatted_messages,
+                    "first_stream_completed_normally": True
+                }
+                
+                # Yield the internal_final_state chunk
+                yield {
+                    "type": "internal_final_state",
+                    "state": internal_state
+                }
+                
                 # Chunk was already yielded at the top of the loop
                 # yield chunk # Removed redundant yield
                 break # Exit loop after saving final message
@@ -172,7 +224,13 @@ async def stream_llm_response(
             else:
                 await asyncio.sleep(0) # Yield control briefly
 
-        # Message saving is now handled within the loop before yielding final/error chunks
+        # After loop completion
+        if not error_occurred and finish_reason:
+            logger.debug(f"Stream finished successfully for chat {chat_id}. Final chunk processed. Finish reason: {finish_reason}")
+        elif error_occurred:
+             logger.debug(f"Stream finished due to error for chat {chat_id}. Error message: {error_message}")
+        else:
+             logger.warning(f"Stream finished for chat {chat_id} without processing a final 'done' chunk or encountering a known error.")
 
     except asyncio.TimeoutError: # Handle timeout during initial generation call
         logger.error(f"Timeout occurred during initial generation call for chat {chat_id}")
@@ -192,14 +250,16 @@ async def stream_llm_response(
 
     # Handle broader errors during the streaming process itself
     except Exception as e:
-        logger.exception(f"Error in streaming response for chat {chat_id}: {str(e)}")
+        logger.exception(f"Caught exception during streaming response for chat {chat_id}: {type(e).__name__} - {str(e)}") # Log exception type and message
         # Determine a user-friendly error message
-        if "context length" in str(e).lower():
+        error_details = str(e)
+        if "context length" in error_details.lower():
              error_message = "The request exceeded the model's context limit. Please try shortening your message or reducing the number of documents used."
-        elif "rate limit" in str(e).lower():
+        elif "rate limit" in error_details.lower():
              error_message = "The request was rate-limited by the AI provider. Please wait a moment and try again."
         else:
-             error_message = f"An unexpected error occurred while generating the response: {str(e)}"
+             error_message = f"An unexpected error occurred while generating the response: {error_details}"
+        logger.debug(f"Generated user-facing error message: {error_message}")
 
         error_chunk = {
             "content": error_message,

@@ -8,6 +8,7 @@ class MessageRole(str, enum.Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+    TOOL = "tool"
 
 class FeedbackType(str, enum.Enum):
     POSITIVE = "positive"
@@ -25,6 +26,7 @@ class Chat(Base):
     # Relationships
     messages = relationship("Message", back_populates="chat", cascade="all, delete-orphan")
     chat_tags = relationship("ChatTag", back_populates="chat", cascade="all, delete-orphan")
+    tags = relationship("Tag", secondary="chat_tags", back_populates="chats", overlaps="chat_tags")
     
     def __repr__(self):
         return f"<Chat {self.id}>"

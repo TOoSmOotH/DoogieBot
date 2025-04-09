@@ -1,0 +1,97 @@
+name: Doogie Chat Bot CI/CD
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  build-and-test:
+    runs-on: self-hosted
+
+    steps:
+      # Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      # Setup Docker
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
+
+      # Build Docker image
+      - name: Build Docker image
+        run: make docker-build
+        env:
+          FIRST_ADMIN_EMAIL: admin@example.com
+          FIRST_ADMIN_PASSWORD: change-this-password
+          SECRET_KEY: testing-key-not-for-production
+
+      # Start Docker container in detached mode
+      - name: Start Docker container
+        run: docker compose up -d
+        env:
+          FIRST_ADMIN_EMAIL: admin@example.com
+          FIRST_ADMIN_PASSWORD: change-this-password
+          SECRET_KEY: testing-key-not-for-production
+
+      # Wait for services to be ready
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for services to be ready..."
+          sleep 120  # Giving enough time for both frontend and backend to start
+
+      # Test backend API endpoint
+      - name: Test backend API health endpoint
+        run: |
+          if curl -f http://localhost:8000/api/v1/health; then
+            echo "Backend service is running correctly"
+          else
+            echo "Backend service failed health check"
+            docker compose logs
+            exit 1
+          fi
+
+      # Test frontend service
+      - name: Test frontend service
+        run: |
+          if curl -f http://localhost:3000; then
+            echo "Frontend service is running correctly"
+          else
+            echo "Frontend service failed health check"
+            exit 1
+          fi
+
+      # Login to GitHub Container Registry
+      - name: Login to GitHub Container Registry
+        if: success() && github.event_name == 'push'
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tag and push Docker image
+      - name: Tag and push Docker image
+        if: success() && github.event_name == 'push'
+        run: |
+          # Set image name based on repository name
+          IMAGE_NAME=ghcr.io/toosmooth/doogiebot
+          docker build . -t $IMAGE_NAME
+          # Tag with branch name
+          BRANCH=${GITHUB_REF#refs/heads/}
+          
+          # Tag and push the image
+          docker tag $IMAGE_NAME:latest $IMAGE_NAME:$BRANCH
+          docker push $IMAGE_NAME:$BRANCH
+          
+          # If it's main branch, also tag as latest
+          if [ "$BRANCH" = "main" ]; then
+            docker tag $IMAGE_NAME:latest $IMAGE_NAME:latest
+            docker push $IMAGE_NAME:latest
+          fi
+
+      # Stop Docker container
+      - name: Stop Docker container
+        run: docker compose down
+        if: always()  # Run even if previous steps fail

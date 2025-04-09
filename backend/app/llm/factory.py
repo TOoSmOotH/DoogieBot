@@ -39,7 +39,8 @@ class LLMFactory:
     def create_separate_clients(
         cls,
         chat_config: Dict[str, Any],
-        embedding_config: Dict[str, Any]
+        embedding_config: Dict[str, Any],
+        user_id: Optional[str] = None # Add user_id parameter
     ) -> Tuple[LLMClient, LLMClient]:
         """
         Create separate chat and embedding clients from their respective configs.
@@ -77,9 +78,10 @@ class LLMFactory:
                 provider=embedding_provider,
                 model=embedding_config.get('model'),
                 api_key=embedding_config.get('api_key'),
-                base_url=embedding_config.get('base_url')
+                base_url=embedding_config.get('base_url'),
+                user_id=user_id # Pass user_id
             )
-            
+
             return (chat_client, embedding_client)
             
         except Exception as e:
@@ -92,7 +94,8 @@ class LLMFactory:
         provider: str,
         model: Optional[str] = None,
         api_key: Optional[str] = None,
-        base_url: Optional[str] = None
+        base_url: Optional[str] = None,
+        user_id: Optional[str] = None # Add user_id parameter
     ) -> LLMClient:
         """
         Internal method to create a single client instance.
@@ -127,9 +130,10 @@ class LLMFactory:
         client = client_class(
             model=model,
             api_key=api_key,
-            base_url=base_url
+            base_url=base_url,
+            user_id=user_id # Pass user_id to constructor
         )
-        logger.info(f"Created {provider} client with model {model}")
+        logger.info(f"Created {provider} client with model {model} for user {user_id}")
         return client
 
     @classmethod
@@ -140,7 +144,8 @@ class LLMFactory:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         embedding_model: Optional[str] = None,
-        embedding_provider: Optional[str] = None
+        embedding_provider: Optional[str] = None,
+        user_id: Optional[str] = None # Add user_id parameter
     ) -> Union[LLMClient, Tuple[LLMClient, LLMClient]]:
         """
         Create an LLM client for the specified provider (legacy method).
@@ -182,9 +187,10 @@ class LLMFactory:
                 provider=provider,
                 model=model,
                 api_key=api_key,
-                base_url=base_url
+                base_url=base_url,
+                user_id=user_id # Pass user_id
             )
-            
+
             # If same provider, return single client with embedding model set
             if provider == embedding_provider:
                 chat_client.embedding_model = embedding_model
@@ -196,9 +202,10 @@ class LLMFactory:
                 provider=embedding_provider,
                 model=embedding_model,
                 api_key=api_key,
-                base_url=base_url
+                base_url=base_url,
+                user_id=user_id # Pass user_id
             )
-            
+
             return (chat_client, embedding_client)
             
         except Exception as e:

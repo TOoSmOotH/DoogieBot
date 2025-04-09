@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import asyncio
+import uuid # For tool call IDs
 
 from app.llm.base import LLMClient
 from app.core.config import settings
@@ -16,127 +17,104 @@ class OpenAIClient(LLMClient):
     """
     Client for OpenAI API.
     """
-    
+
     def __init__(
         self,
         model: str = "gpt-3.5-turbo",
         api_key: Optional[str] = None,
         base_url: Optional[str] = "https://api.openai.com/v1",
-        embedding_model: Optional[str] = None
+        embedding_model: Optional[str] = None,
+        user_id: Optional[str] = None # Add user_id parameter
     ):
         """
         Initialize the OpenAI client.
-        
-        Args:
-            model: Model name
-            api_key: OpenAI API key
-            base_url: Base URL for API
-            embedding_model: Model to use for embeddings (if different from chat model)
         """
-        super().__init__(model, api_key, base_url, embedding_model)
+        # Pass user_id to base class constructor
+        super().__init__(model, api_key, base_url, embedding_model, user_id=user_id)
         self.api_key = api_key or settings.OPENAI_API_KEY
         if not self.api_key:
             raise ValueError("OpenAI API key is required")
-        
-        # Ensure base_url is set to default if None
+
         if self.base_url is None:
             self.base_url = "https://api.openai.com/v1"
-    
+
     async def generate(
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-        stream: bool = False
+        stream: bool = False,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None
     ) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
         """
         Generate a response from OpenAI.
-        
-        Args:
-            messages: List of messages in the conversation
-            temperature: Temperature for generation
-            max_tokens: Maximum number of tokens to generate
-            stream: Whether to stream the response
-            
-        Returns:
-            Response from OpenAI or an async generator for streaming
         """
-        # Ensure base_url is set
         if not self.base_url or not self.base_url.startswith("http"):
             self.base_url = "https://api.openai.com/v1"
-            
         url = f"{self.base_url}/chat/completions"
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
-        
-        # Log the messages for debugging
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
         logger.info(f"Sending {len(messages)} messages to OpenAI. First message role: {messages[0]['role'] if messages else 'none'}")
-        
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "stream": stream
+
+        payload: Dict[str, Any] = {
+            "model": self.model, "messages": messages, "temperature": temperature, "stream": stream
         }
-        
-        # Log the full payload for debugging if LLM_DEBUG_LOGGING is enabled
+        if max_tokens: payload["max_tokens"] = max_tokens
+        if tools: payload["tools"] = tools
+        if tool_choice: payload["tool_choice"] = tool_choice
+
         if settings.LLM_DEBUG_LOGGING:
-            logger.info("Full OpenAI request payload (LLM_DEBUG_LOGGING enabled):")
-            try:
-                # Log each message separately to avoid log size limitations
-                for i, msg in enumerate(messages):
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')
-                    
-                    # For system messages that might contain RAG context, log in detail
-                    if role == 'system':
-                        logger.info(f"Message {i} - Role: {role}")
-                        # Log the system message in chunks to avoid log size limitations
-                        content_chunks = [content[i:i+1000] for i in range(0, len(content), 1000)]
-                        for j, chunk in enumerate(content_chunks):
-                            logger.info(f"System message chunk {j}: {chunk}")
-                    else:
-                        # For non-system messages, log a preview
-                        content_preview = content[:200] + "..." if len(content) > 200 else content
-                        logger.info(f"Message {i} - Role: {role}, Content preview: {content_preview}")
-                
-                # Log other payload parameters
-                logger.info(f"Model: {self.model}, Temperature: {temperature}, Stream: {stream}")
-            except Exception as e:
-                logger.error(f"Error logging payload: {str(e)}")
-        
-        if max_tokens:
-            payload["max_tokens"] = max_tokens
-        
+            # Log payload details (simplified)
+            log_payload = {k: v for k, v in payload.items() if k != 'messages'}
+            logger.info(f"Other OpenAI Payload Params: {json.dumps(log_payload, indent=2)}")
+            # Log message previews if needed
+
         start_time = time.time()
-        
+
         if stream:
             return self._stream_response(url, headers, payload, start_time)
         else:
+            # Non-streaming logic
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         logger.error(f"OpenAI API error: {error_text}")
                         raise Exception(f"OpenAI API error: {response.status} - {error_text}")
-                    
+
                     result = await response.json()
-                    
-                    # Calculate tokens per second
-                    tokens = result.get("usage", {}).get("completion_tokens", 0)
-                    tokens_per_second = self.calculate_tokens_per_second(start_time, tokens)
-                    
-                    return {
-                        "content": result["choices"][0]["message"]["content"],
+                    logger.debug(f"OpenAI non-stream response: {result}")
+
+                    usage = result.get("usage", {})
+                    prompt_tokens = usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("completion_tokens", 0)
+                    total_tokens = prompt_tokens + completion_tokens
+                    tokens_per_second = self.calculate_tokens_per_second(start_time, completion_tokens)
+
+                    message = result["choices"][0]["message"]
+                    content = message.get("content")
+                    tool_calls = message.get("tool_calls") # Check for tool calls
+                    finish_reason = result["choices"][0].get("finish_reason")
+
+                    # If tool_calls are present, the finish reason should reflect that
+                    if tool_calls:
+                        finish_reason = "tool_calls"
+                        logger.info(f"OpenAI returned tool calls: {tool_calls}")
+
+                    response_data = {
+                        "content": content,
+                        "tool_calls": tool_calls,
                         "model": self.model,
                         "provider": "openai",
-                        "tokens": tokens,
-                        "tokens_per_second": tokens_per_second
+                        "tokens": total_tokens,
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "tokens_per_second": tokens_per_second,
+                        "finish_reason": finish_reason
                     }
-    
+                    return {k: v for k, v in response_data.items() if v is not None}
+
+
     async def _stream_response(
         self,
         url: str,
@@ -144,165 +122,169 @@ class OpenAIClient(LLMClient):
         payload: Dict[str, Any],
         start_time: float
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Stream response from OpenAI.
-        
-        Args:
-            url: API URL
-            headers: Request headers
-            payload: Request payload
-            start_time: Start time for calculating tokens per second
-            
-        Yields:
-            Chunks of the response
-        """
-        # Ensure URL is valid
-        if not url.startswith("http"):
-            # If base_url is not set or invalid, use the default
-            if not self.base_url or not self.base_url.startswith("http"):
-                self.base_url = "https://api.openai.com/v1"
-            
-            # If url is just a path, prepend the base_url
-            if url.startswith("/"):
-                url = f"{self.base_url}{url}"
-            else:
-                url = f"{self.base_url}/{url}"
-        
+        """ Stream response from OpenAI, handling content and tool call deltas. """
+        if not url.startswith("http"): # Ensure URL is valid
+            if not self.base_url or not self.base_url.startswith("http"): self.base_url = "https://api.openai.com/v1"
+            if url.startswith("/"): url = f"{self.base_url}{url}"
+            else: url = f"{self.base_url}/{url}"
+
         logger.debug(f"Starting OpenAI streaming request to {url}")
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error(f"OpenAI API error: {error_text}")
-                    raise Exception(f"OpenAI API error: {response.status} - {error_text}")
-                
-                logger.debug(f"OpenAI streaming connection established with status {response.status}")
-                
-                # Initialize variables for streaming
-                content = ""
-                token_count = 0
+                    logger.error(f"OpenAI API error during stream connection: {error_text}")
+                    yield {"type": "error", "error": f"OpenAI API error: {response.status} - {error_text}", "done": True}
+                    return
+
+                logger.debug(f"OpenAI streaming connection established")
+
+                full_content = ""
+                # --- Tool Call Accumulation Logic ---
+                # Stores partially built tool calls, keyed by index
+                current_tool_calls: Dict[int, Dict[str, Any]] = {}
+                # ---
+
+                prompt_tokens = 0 # Cannot get reliably from stream
+                completion_tokens = 0 # Estimate based on chunks
+                finish_reason = None
+                model_name = self.model
                 chunk_count = 0
-                
-                # Process the stream
-                logger.debug(f"Starting to process OpenAI stream")
+
+                # Yield start chunk (synthesized)
+                yield {"type": "start", "role": "assistant", "model": model_name}
+
+                logger.debug(f"Processing OpenAI stream")
                 async for line in response.content:
                     line = line.decode('utf-8').strip()
-                    
-                    # Skip empty lines or [DONE]
                     if not line or line == "data: [DONE]":
-                        if line == "data: [DONE]":
-                            logger.debug("Received [DONE] from OpenAI stream")
+                        if line == "data: [DONE]": logger.debug("Received [DONE]")
                         continue
-                    
-                    # Remove "data: " prefix
-                    if line.startswith("data: "):
-                        line = line[6:]
-                    
+                    if line.startswith("data: "): line = line[6:]
+
                     try:
+                        if not line.strip(): continue
                         data = json.loads(line)
-                        
-                        # Extract delta content
-                        delta = data.get("choices", [{}])[0].get("delta", {})
-                        delta_content = delta.get("content", "")
-                        
+                        chunk_count += 1
+                        choice = data.get("choices", [{}])[0]
+                        delta = choice.get("delta", {})
+                        # Finish reason can be in the last delta chunk or the choice itself
+                        current_finish_reason = choice.get("finish_reason") or delta.get("finish_reason")
+                        if current_finish_reason:
+                             finish_reason = current_finish_reason # Store the latest non-null reason
+
+                        delta_content = delta.get("content")
+                        delta_tool_calls = delta.get("tool_calls")
+
+                        yield_chunk: Dict[str, Any] = {"type": "delta", "done": False}
+                        has_update = False
+
                         if delta_content:
-                            chunk_count += 1
-                            content += delta_content
-                            token_count += 1  # Approximate token count
-                            
-                            # Log every 10th chunk to avoid excessive logging
-                            if chunk_count % 10 == 0:
-                                logger.debug(f"Received chunk {chunk_count} from OpenAI: '{delta_content}' (total: {len(content)} chars)")
-                            
-                            # Calculate tokens per second
-                            tokens_per_second = self.calculate_tokens_per_second(start_time, token_count)
-                            
-                            logger.debug(f"Yielding chunk {chunk_count} at {time.time()}")
-                            
-                            # Yield immediately without any delay
-                            yield {
-                                "content": content,
-                                "model": self.model,
-                                "provider": "openai",
-                                "tokens": token_count,
-                                "tokens_per_second": tokens_per_second,
-                                "done": False,
-                                "timestamp": time.time()
-                            }
-                            
-                            # Ensure the chunk is sent immediately
-                            await asyncio.sleep(0)
+                            full_content += delta_content
+                            yield_chunk["content"] = delta_content
+                            has_update = True
+
+                        if delta_tool_calls:
+                            has_update = True
+                            yield_chunk["tool_calls_delta"] = delta_tool_calls # Yield the raw delta
+                            # --- Accumulate Tool Call Deltas ---
+                            for tool_call_delta in delta_tool_calls:
+                                index = tool_call_delta.get("index")
+                                if index is None: continue # Should always have index
+
+                                if index not in current_tool_calls:
+                                    # Initialize structure for this tool call index
+                                    current_tool_calls[index] = {
+                                        "id": None,
+                                        "type": "function",
+                                        "function": {"name": None, "arguments": ""}
+                                    }
+
+                                call_part = current_tool_calls[index]
+                                if tool_call_delta.get("id"):
+                                    call_part["id"] = tool_call_delta["id"]
+                                if tool_call_delta.get("type"):
+                                    call_part["type"] = tool_call_delta["type"] # Usually 'function'
+
+                                func_delta = tool_call_delta.get("function", {})
+                                if func_delta.get("name"):
+                                    call_part["function"]["name"] = func_delta["name"]
+                                if func_delta.get("arguments"):
+                                    call_part["function"]["arguments"] += func_delta["arguments"]
+                            # ---
+
+                        if has_update:
+                            yield yield_chunk
+
+                        if finish_reason:
+                            logger.debug(f"Finish reason '{finish_reason}' received in chunk {chunk_count}")
+                            # Don't break immediately, process potential final content/tool calls
+                            # The [DONE] message will terminate the loop
+
                     except json.JSONDecodeError:
-                        logger.warning(f"Could not parse line: {line}")
-                
-                logger.debug(f"OpenAI stream complete, yielding final chunk with done=True")
-                # Final yield with done=True
-                tokens_per_second = self.calculate_tokens_per_second(start_time, token_count)
-                yield {
-                    "content": content,
-                    "model": self.model,
+                        logger.warning(f"Could not parse OpenAI stream line: {line}")
+                    except Exception as e:
+                        logger.error(f"Error processing OpenAI stream chunk: {e}")
+                        yield {"type": "error", "error": str(e), "done": True}
+                        return
+
+                # --- Final Chunk Processing ---
+                logger.debug(f"OpenAI stream processing complete after {chunk_count} delta chunks.")
+
+                completion_tokens = chunk_count # Very rough estimate
+                tokens_per_second = self.calculate_tokens_per_second(start_time, completion_tokens)
+
+                # Convert accumulated tool calls dict to list
+                final_tool_calls = [current_tool_calls[i] for i in sorted(current_tool_calls.keys())] if current_tool_calls else None
+
+                final_yield: Dict[str, Any] = {
+                    "type": "final",
+                    "done": True,
+                    "content": full_content if full_content else None,
+                    "tool_calls": final_tool_calls, # Send fully accumulated calls
+                    "model": model_name,
                     "provider": "openai",
-                    "tokens": token_count,
+                    "usage": { # Estimated usage
+                        "prompt_tokens": prompt_tokens, # Unknown from stream
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": prompt_tokens + completion_tokens
+                    },
                     "tokens_per_second": tokens_per_second,
-                    "done": True
+                    "finish_reason": finish_reason or "stop" # Use detected reason or default
                 }
-                logger.debug(f"OpenAI streaming complete, yielded {chunk_count} chunks")
-    
+                yield {k: v for k, v in final_yield.items() if v is not None}
+                logger.debug(f"OpenAI streaming yielded final chunk.")
+
+
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """
-        Get embeddings for a list of texts using OpenAI.
-        
-        Args:
-            texts: List of texts to embed
-            
-        Returns:
-            List of embedding vectors
-        """
-        # Ensure base_url is set
-        if not self.base_url or not self.base_url.startswith("http"):
-            self.base_url = "https://api.openai.com/v1"
-            
+        """ Get embeddings for a list of texts using OpenAI. """
+        if not self.base_url or not self.base_url.startswith("http"): self.base_url = "https://api.openai.com/v1"
         url = f"{self.base_url}/embeddings"
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
-        
-        # Use the instance's embedding model or fall back to a default
-        embedding_model = self.embedding_model
-        if not embedding_model:
-            embedding_model = "text-embedding-ada-002"  # Default OpenAI embedding model
-        
-        # Log the embedding request
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
+        embedding_model = self.embedding_model or "text-embedding-ada-002"
         logger.info(f"Generating embeddings for {len(texts)} texts using OpenAI model: {embedding_model}")
-        
+
         try:
-            payload = {
-                "model": embedding_model,
-                "input": texts
-            }
-            
+            payload = {"model": embedding_model, "input": texts}
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error(f"OpenAI API error: {error_text}")
-                        # Return empty embeddings instead of raising an exception
-                        return [[0.0] * 1536 for _ in range(len(texts))]  # OpenAI embeddings are typically 1536 dimensions
-                    
+                        logger.error(f"OpenAI API error generating embeddings: {error_text}")
+                        dimension = 1536
+                        if "3-small" in embedding_model: dimension = 1536
+                        elif "3-large" in embedding_model: dimension = 3072
+                        return [[0.0] * dimension for _ in range(len(texts))]
+
                     result = await response.json()
-                    
-                    # Extract embeddings
                     embeddings = [item["embedding"] for item in result["data"]]
-                    
                     logger.info(f"Successfully generated {len(embeddings)} embeddings with OpenAI")
-                    if embeddings:
-                        logger.debug(f"Embedding dimensions: {len(embeddings[0])}")
-                    
+                    if embeddings: logger.debug(f"Embedding dimensions: {len(embeddings[0])}")
                     return embeddings
         except Exception as e:
             logger.error(f"Error generating embeddings with OpenAI: {str(e)}")
             logger.exception("Detailed embedding generation error:")
-            # Return empty embeddings
-            return [[0.0] * 1536 for _ in range(len(texts))]  # OpenAI embeddings are typically 1536 dimensions
+            dimension = 1536
+            if "3-small" in embedding_model: dimension = 1536
+            elif "3-large" in embedding_model: dimension = 3072
+            return [[0.0] * dimension for _ in range(len(texts))]

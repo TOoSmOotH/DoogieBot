@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 import logging
-
+from datetime import datetime, UTC
 from app.models.embedding_config import EmbeddingConfig
 from app.schemas.embedding import EmbeddingConfigCreate, EmbeddingConfigUpdate
 from app.core.config import settings
@@ -29,7 +29,7 @@ class EmbeddingConfigService:
             Created embedding configuration
         """
         # Import datetime for explicit datetime fields
-        from datetime import datetime
+        from datetime import datetime, UTC
         
         # Create config with explicit datetime fields
         db_config = EmbeddingConfig(
@@ -39,8 +39,8 @@ class EmbeddingConfigService:
             base_url=config.base_url,
             config=config.config,
             is_active=False,  # New configs are not active by default
-            created_at=datetime.now(),
-            updated_at=datetime.now()
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC)
         )
         
         db.add(db_config)
@@ -69,10 +69,10 @@ class EmbeddingConfigService:
         # If config exists but has None for datetime fields, set them
         if config:
             if config.created_at is None:
-                config.created_at = datetime.now()
+                config.created_at = datetime.now(UTC)
                 
             if config.updated_at is None:
-                config.updated_at = datetime.now()
+                config.updated_at = datetime.now(UTC)
                 
             # Commit the changes to ensure the fields are saved
             db.commit()
@@ -98,10 +98,10 @@ class EmbeddingConfigService:
         # If config exists but has None for datetime fields, set them
         if config:
             if config.created_at is None:
-                config.created_at = datetime.now()
+                config.created_at = datetime.now(UTC)
                 
             if config.updated_at is None:
-                config.updated_at = datetime.now()
+                config.updated_at = datetime.now(UTC)
                 
             # Commit the changes to ensure the fields are saved
             db.commit()
@@ -128,10 +128,10 @@ class EmbeddingConfigService:
         # Check each config for None datetime fields
         for config in configs:
             if config.created_at is None:
-                config.created_at = datetime.now()
+                config.created_at = datetime.now(UTC)
                 
             if config.updated_at is None:
-                config.updated_at = datetime.now()
+                config.updated_at = datetime.now(UTC)
         
         # If any configs were updated, commit the changes
         if configs and any(config.created_at is None or config.updated_at is None for config in configs):
@@ -176,11 +176,11 @@ class EmbeddingConfigService:
             setattr(db_config, key, value)
         
         # Explicitly set updated_at to ensure it's not None
-        db_config.updated_at = datetime.now()
+        db_config.updated_at = datetime.now(UTC)
         
         # Ensure created_at is set if it's None
         if db_config.created_at is None:
-            db_config.created_at = datetime.now()
+            db_config.created_at = datetime.now(UTC)
         
         db.commit()
         db.refresh(db_config)
@@ -244,11 +244,11 @@ class EmbeddingConfigService:
         db_config.is_active = True
         
         # Explicitly set updated_at to ensure it's not None
-        db_config.updated_at = datetime.now()
+        db_config.updated_at = datetime.now(UTC)
         
         # Ensure created_at is set if it's None
         if db_config.created_at is None:
-            db_config.created_at = datetime.now()
+            db_config.created_at = datetime.now(UTC)
             
         db.commit()
         db.refresh(db_config)

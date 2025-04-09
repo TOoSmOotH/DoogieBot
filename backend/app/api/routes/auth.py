@@ -7,11 +7,12 @@ from jose import JWTError
 
 from app.core.config import settings
 from app.db.base import get_db
-from app.models.user import UserStatus
+from app.models.user import User, UserStatus
 from app.schemas.token import Token, RefreshToken
 from app.schemas.user import UserCreate, UserResponse
 from app.services.user import UserService
 from app.utils.security import create_access_token, create_refresh_token, create_token_pair, decode_token
+from app.utils.deps import get_current_user
 
 router = APIRouter()
 
@@ -38,10 +39,12 @@ def register(
 @router.post("/login", response_model=Token)
 def login(
     db: Session = Depends(get_db),
-    form_data: OAuth2PasswordRequestForm = Depends()
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    remember_me: bool = False
 ) -> Any:
     """
     OAuth2 compatible token login, get an access token for future requests.
+    The remember_me parameter controls token expiration time.
     """
     # Authenticate user
     user = UserService.authenticate(db, email=form_data.username, password=form_data.password)
@@ -67,8 +70,12 @@ def login(
     # Update last login timestamp
     UserService.update_last_login(db, user)
     
-    # Create access and refresh tokens
-    access_token, refresh_token = create_token_pair(user.id)
+    # Create access and refresh tokens with expiration based on remember_me
+    access_token_expires = timedelta(days=30 if remember_me else 1)
+    refresh_token_expires = timedelta(days=90 if remember_me else 7)
+    
+    access_token = create_access_token(user.id, expires_delta=access_token_expires)
+    refresh_token = create_refresh_token(user.id, expires_delta=refresh_token_expires)
     
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
@@ -118,3 +125,13 @@ def refresh_token(
         
     except JWTError:
         raise credentials_exception
+
+@router.get("/check")
+def check_auth(
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    Check if the user is authenticated.
+    Returns 200 OK if authenticated, 401 Unauthorized if not.
+    """
+    return {"authenticated": True, "user_id": current_user.id, "email": current_user.email}

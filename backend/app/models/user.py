@@ -28,6 +28,8 @@ class User(Base):
     
     # Relationships
     tags = relationship("Tag", back_populates="user", cascade="all, delete-orphan")
+    mcp_configs = relationship("MCPServerConfig", back_populates="user", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="uploader", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.email}>"

@@ -59,7 +59,7 @@ export interface Tag {
 export interface Message {
   id: number;
   chat_id: number;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   created_at: string;
   tokens?: number;
@@ -72,6 +72,10 @@ export interface Message {
   context_documents?: string[];
   document_ids?: string[]; // Add this field for document references
   related_question_content?: string; // Add field for related question content
+  tool_calls?: any[]; // Tool calls for assistant messages
+  tool_call_id?: string; // ID linking a tool result back to a tool call
+  name?: string; // Name of the function called (for tool role messages)
+  parentMessages?: Message[]; // Messages in the same chat for reference (used for tool call display)
 }
 
 export interface Feedback {

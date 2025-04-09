@@ -1,18 +1,13 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production  # Use the production stage for deployment
-      args:
-        - BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-        - VERSION=1.0.0
+    image: ghcr.io/toosmooth/doogiebot:latest
     ports:
       - "3000:3000"  # Frontend
       - "8000:8000"  # Backend API
     volumes:
-      # Mount the backend directory to make DB and Alembic config available
-      - ./backend:/app/backend
+      - ./data/db:/app/backend/db  # Persist database files
+      - ./data/indexes:/app/backend/indexes  # Persist index files
+      - ./entrypoint.prod.sh:/app/entrypoint.prod.sh  # Mount the production entrypoint script
     environment:
       - NODE_ENV=production
       - PYTHONPATH=/app

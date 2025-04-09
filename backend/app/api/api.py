@@ -1,6 +1,12 @@
-from fastapi import APIRouter
-from app.api.routes import auth, users, chats, documents, rag, llm, tags, system, embedding, reranking
+"""
+Main API router for the application.
 
+This module collects all API routes and combines them into a single router.
+"""
+
+from fastapi import APIRouter
+from app.api.routes import auth, users, chats, documents, rag, llm, tags, system, embedding, reranking, docker, mcp # Added docker
+# Create the main API router
 api_router = APIRouter()
 
 # Health check endpoint for API V1
@@ -19,3 +25,5 @@ api_router.include_router(tags.router, prefix="/tags", tags=["tags"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(embedding.router, prefix="/embedding", tags=["embedding"])
 api_router.include_router(reranking.router, prefix="/reranking", tags=["reranking"])
+api_router.include_router(mcp.router, prefix="/mcp", tags=["mcp"])
+api_router.include_router(docker.router, prefix="/docker", tags=["docker"]) # Added docker router

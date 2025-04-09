@@ -6,7 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { Message } from '@/types';
 import { parseThinkTags } from '@/utils/thinkTagParser';
-import Tooltip from '@/components/ui/Tooltip';
+import Tooltip from '@/components/ui/CustomTooltip';
 import { useNotification } from '@/contexts/NotificationContext';
 import DocumentReferences from '@/components/chat/DocumentReferences';
 import { submitFeedback } from '@/services/chat'; // Import the feedback service

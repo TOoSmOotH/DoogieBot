@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any, Union, Generic, TypeVar
 
 T = TypeVar('T')
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ConfigDict, field_validator
 from datetime import datetime
 
 # Document schemas
@@ -27,18 +27,14 @@ class DocumentResponse(DocumentBase):
     created_at: datetime
     updated_at: datetime
     meta_data: Optional[Dict[str, Any]] = None
-    chunk_count: Optional[int] = None # Added chunk_count
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DocumentDetailResponse(DocumentResponse):
     content: Optional[str] = None
-    # Removed chunks list, will be fetched separately
-    # chunks: Optional[List["DocumentChunkResponse"]] = None
+    chunks: Optional[List["DocumentChunkResponse"]] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Document Chunk schemas
 class DocumentChunkBase(BaseModel):
@@ -56,39 +52,30 @@ class DocumentChunkResponse(DocumentChunkBase):
     created_at: datetime
     embedding: Optional[List[float]] = None
 
-    class Config:
-        from_attributes = True
-
-    @validator('embedding', pre=True)
+    model_config = ConfigDict(from_attributes=True)
+        
+    @field_validator('embedding', mode='before')
+    @classmethod
     def parse_embedding(cls, v):
         if isinstance(v, str):
             try:
                 import json
                 return json.loads(v)
-            except:
+            except json.JSONDecodeError: # Be specific about the exception
                 return None
         return v
 
-# New schema for listing chunk IDs
+# Added missing chunk ID response schema
 class DocumentChunkIdResponse(BaseModel):
     id: str
     chunk_index: int
+    
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
-
-# New schema for fetching a single chunk's content
-class DocumentChunkDetailResponse(BaseModel):
-    id: str
-    document_id: str
-    content: str
-    chunk_index: int
-    meta_data: Optional[Dict[str, Any]] = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
+# Added missing chunk detail response schema
+class DocumentChunkDetailResponse(DocumentChunkResponse):
+    # Extends DocumentChunkResponse with any additional fields needed
+    pass
 
 # Processing schemas
 class ProcessingStatus(BaseModel):
@@ -117,6 +104,6 @@ class PaginatedResponse(BaseModel, Generic[T]):
     page: int
     size: int
     pages: int
-
-# Update forward references
-# DocumentDetailResponse.update_forward_refs() # No longer needed as chunks are removed
+    
+    # Update forward references
+    DocumentDetailResponse.model_rebuild()

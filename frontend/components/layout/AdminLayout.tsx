@@ -26,6 +26,7 @@ const AdminLayout = ({
     { href: '/admin/documents', label: 'Documents' },
     { href: '/admin/llm', label: 'LLM Configuration' },
     { href: '/admin/rag', label: 'RAG Management' },
+    { href: '/admin/mcp', label: 'MCP Management' }, // Added MCP link
     { href: '/admin/chats', label: 'Chat Review' },
     { href: '/admin/system', label: 'System Settings' },
   ];

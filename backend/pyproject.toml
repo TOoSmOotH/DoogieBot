@@ -14,14 +14,15 @@ requires-python = ">=3.12"
 license = {text = "MIT"}
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
     # Web Framework
     "fastapi>=0.108.0",
-    "uvicorn[standard]>=0.30.0",
+    "uvicorn[standard]", # Allow latest version
+    "websockets<14.0", # Pin below version with deprecation warning via uvicorn
     "aiohttp>=3.9.3",  # Updated for Python 3.12 compatibility
     
     # Database
@@ -32,7 +33,7 @@ dependencies = [
     "python-jose>=3.3.0", # Removed [cryptography] extra
     "cryptography>=42.0", # Added cryptography directly
     "passlib[bcrypt]>=1.7.4",
-    "bcrypt>=4.1.2",
+    "bcrypt~=3.2.0",  # Pinned to 3.2.x for passlib 1.7.4 compatibility
     "python-multipart>=0.0.9",
     
     # Data Validation
@@ -49,7 +50,7 @@ dependencies = [
     "scikit-learn>=1.4.1",
     
     # Document Processing
-    "PyPDF2>=3.0.1",
+    "pypdf>=4.0.0",  # Replaced deprecated PyPDF2
     "python-docx>=1.1.0",
     "markdown>=3.6",
     "python-frontmatter>=1.1.0",
@@ -66,11 +67,16 @@ dependencies = [
     # LLM Clients
     "anthropic>=0.21.3",
     "google-generativeai>=0.4.0",
+
+    # Docker
+    "docker>=7.1.0",
+    "mcp>=1.6.0", # Added MCP SDK dependency
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-cov>=4.1.0", # Added for test coverage
     "black>=24.2.0",
     "pylint>=3.1.0",
     "isort>=5.13.2",
@@ -82,14 +88,18 @@ test = [
     "pytest-cov>=4.1.0",
 ]
 
+[tool.setuptools]
+# Explicitly tell setuptools which package directory to include
+packages = ["app"]
+
 [tool.black]
-line-length = 100
-target-version = ["py312"]
+line-length = 120
+target-version = ["py313"]
 
 [tool.isort]
 profile = "black"
-line_length = 100
+line_length = 120
 
 [tool.pylint]
-max-line-length = 100
+max-line-length = 120
 disable = ["C0111", "C0103", "C0303", "W1203"]

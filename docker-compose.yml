@@ -1,9 +1,28 @@
 services:
+  dind-server:
+    image: docker:dind
+    privileged: true
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--tls=false"] # Listen on TCP without TLS for simplicity
+    volumes:
+      - dind-storage:/var/lib/docker # Persist Docker data for the dind instance
+    networks:
+      - default # Ensure it's on the same network
+    restart: unless-stopped
+
   app:
+    # Remove image: line and add build: section
     build:
       context: .
       dockerfile: Dockerfile
-      target: development  # Use the development stage for local development
+      target: development # Explicitly target the development stage
+      args:
+        # Pass the host's Docker GID. Found using: getent group docker | cut -d: -f3
+        DOCKER_GID: 984
+        # You can also pass USER_ID and GROUP_ID if needed, otherwise defaults from Dockerfile are used
+        # USER_ID: 1000
+        # GROUP_ID: 1000
+    depends_on:
+      - dind-server
     ports:
       - "3000:3000"  # Frontend
       - "8000:8000"  # Backend API
@@ -11,8 +30,15 @@ services:
       # Use more specific bind mounts for development
       - ./backend:/app/backend  # Bind mount for backend development
       - ./frontend:/app/frontend  # Bind mount for frontend development
-      # Exclude node_modules and build artifacts from host machine
-      #- /app/frontend/node_modules
+      # --- MODIFIED: Use Docker Desktop socket path (with 60s delay in entrypoint.sh) ---
+      # Removed host Docker socket mount, will connect to dind-server instead
+      - ./data/db:/app/data/db  # Persist database files
+      - ./data/indexes:/app/data/indexes  # Persist index files
+      - ./entrypoint.sh:/app/entrypoint.sh  # Mount the entrypoint script
+      # - /app/.venv # Removed anonymous volume for venv; use the one built into the image
+      - /app/frontend/node_modules # Use anonymous volume for node_modules
+      # Removed anonymous volume for pnpm store; let it use node_modules
+      # Exclude build artifacts from host machine
       #- /app/frontend/.next
       #- /app/backend/__pycache__
     environment:
@@ -26,15 +52,20 @@ services:
       - FIRST_ADMIN_EMAIL=${FIRST_ADMIN_EMAIL:-admin@example.com}
       - FIRST_ADMIN_PASSWORD=${FIRST_ADMIN_PASSWORD:-change-this-password}
       # LLM Service environment variables
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy_key_for_testing}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.40.106:11434}
       - LM_STUDIO_BASE_URL=${LM_STUDIO_BASE_URL:-http://localhost:8000}
       # Memory management
       - PYTHONMALLOC=debug
       - PYTHONWARNINGS=always
+      # MCP configuration
+      - MCP_NETWORK=mcp-network
+      - MCP_DATA_DIR=/var/lib/doogie-chat/mcp
+      - MCP_ENABLE_DOCKER=true
+      - LLM_DEBUG_LOGGING=true # Enable detailed LLM request/response logging
     restart: unless-stopped
     entrypoint: ["/app/entrypoint.sh"]
     # Add memory limits to prevent OOM issues
@@ -53,3 +84,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  dind-storage: {} # Define the named volume for dind-server persistence

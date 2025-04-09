@@ -22,3 +22,6 @@ class RerankingConfig(Base):
     
     # Additional configuration stored as JSON
     config = Column(JSON, nullable=True)
+
+    def __repr__(self):
+        return f"<RerankingConfig id={self.id}, provider={self.provider}, model={self.model}>"

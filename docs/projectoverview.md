@@ -15,7 +15,7 @@
     3. RAG Section: This is where a user can upload documents to the RAG. We should support pdf, microsoft documents, md, rst, tst, json, and jsonl files. We should be able to rebuid the entire rag from the docs with a button. We should be able to regenerate the graphrag. There should be a text input section that allows manual adding of information to the rag.
     4. Chat review: This section allows the admin to review chats that were deemed incorrect. There should be a way to mark a chat as reviewed by an admin so multiple admin are 
 
-- I want to use Python 3.12+ and sqlite3
+- I want to use Python 3.13+ and sqlite3
 - The backend should be FastAPI.
 - Next.js/React for the front end.
 - Try and use the latest versions of dependencies.

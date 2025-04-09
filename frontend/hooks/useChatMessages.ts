@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { Chat, Message } from '@/types';
 import { submitFeedback, updateMessage, createChat, updateChat, getChat } from '@/services/chat';
-import { getApiUrl } from '@/services/api';
+import { getApiUrl, getToken, post } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { announce } from '@/utils/accessibilityUtils';
@@ -17,6 +17,8 @@ export interface UseChatMessagesReturn {
   handleFeedback: (messageId: string, feedback: FeedbackType, feedbackText?: string) => Promise<void>;
   handleUpdateMessage: (messageId: string, newContent: string) => Promise<boolean>;
   closeEventSource: () => void; // Expose close function if needed externally
+  refreshChat: () => Promise<void>; // Expose refresh function
+  toolErrors: {[key: string]: any}; // Expose tool errors
 }
 
 export const useChatMessages = (
@@ -31,12 +33,14 @@ export const useChatMessages = (
   const { showNotification } = useNotification();
   const router = useRouter();
 
-  
-    const [isStreaming, setIsStreaming] = useState(false);
-    const [isWaitingForResponse, setIsWaitingForResponse] = useState(false); // New state for initial wait
-    const [error, setError] = useState<string | null>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const eventSourceRef = useRef<EventSource | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false); // New state for initial wait
+  const [error, setError] = useState<string | null>(null);
+  const [needsRefresh, setNeedsRefresh] = useState(false); // Add state for tracking refresh needs
+  const [toolErrors, setToolErrors] = useState<{[key: string]: any}>({});
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
   
   const closeEventSource = useCallback(() => {
     if (eventSourceRef.current) {
@@ -65,6 +69,15 @@ export const useChatMessages = (
     return () => clearTimeout(scrollTimeout);
   }, [currentChat?.messages, isStreaming]);
 
+  // Add a useEffect to refresh the chat data when needed
+  useEffect(() => {
+    // If we have a chat ID but no messages, or if we need to refresh after a tool call
+    if (currentChat?.id && (!currentChat?.messages || currentChat.messages.length === 0 || needsRefresh)) {
+      loadChats(); // Use the passed-in function to refresh/load chats
+      setNeedsRefresh(false);
+    }
+  }, [currentChat?.id, currentChat?.messages, needsRefresh]);
+
 
   const handleFeedback = async (messageId: string, feedback: FeedbackType, feedbackText?: string) => {
     if (!currentChat) return;
@@ -82,11 +95,11 @@ export const useChatMessages = (
       }
 
       // Update the message in the UI
-      setCurrentChat(prev => {
+      setCurrentChat((prev: Chat | null) => {
         if (!prev) return null;
         return {
           ...prev,
-          messages: prev.messages?.map(msg =>
+          messages: prev.messages?.map((msg: Message) =>
             String(msg.id) === messageId
               ? { ...msg, feedback, feedback_text: feedbackText }
               : msg
@@ -120,11 +133,11 @@ export const useChatMessages = (
 
       // Update the message in the UI
       if (updatedMessage) {
-        setCurrentChat(prev => {
+        setCurrentChat((prev: Chat | null) => {
           if (!prev) return null;
           return {
             ...prev,
-            messages: prev.messages?.map(msg =>
+            messages: prev.messages?.map((msg: Message) =>
               String(msg.id) === messageId ? { ...updatedMessage } : msg // Use the full updated message from backend
             )
           };
@@ -146,7 +159,7 @@ export const useChatMessages = (
   const setupEventSource = (chatId: string, content: string, contextDocuments?: string[]) => {
     closeEventSource(); // Ensure previous connection is closed
 
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) {
       throw new Error('No authentication token found');
     }
@@ -160,6 +173,7 @@ export const useChatMessages = (
 
     const fullUrl = getApiUrl(streamUrl, false); // useBaseUrl = false for EventSource
     console.log('Setting up EventSource connection to:', fullUrl);
+    console.log('Using token for EventSource:', token.substring(0, 10) + '...');
 
     const eventSource = new EventSource(fullUrl);
     eventSourceRef.current = eventSource;
@@ -181,17 +195,23 @@ export const useChatMessages = (
         setError(data.content || 'An error occurred during streaming');
         closeEventSource();
         setIsStreaming(false);
+        setIsWaitingForResponse(false);
         return;
       }
 
       // Update the last assistant message content
-      setCurrentChat((prev) => {
+      setCurrentChat((prev: Chat | null) => {
         if (!prev || !prev.messages) return prev;
 
         const updatedMessages = [...prev.messages];
-        const lastAssistantIndex = updatedMessages.findLastIndex(msg => msg.role === 'assistant');
+        const lastAssistantIndex = updatedMessages.findLastIndex((msg: Message) => msg.role === 'assistant');
 
         if (lastAssistantIndex !== -1) {
+          // Check if the message content is already updated to avoid duplicates
+          if (updatedMessages[lastAssistantIndex].content === data.content) {
+            return prev; // No change needed
+          }
+          
           // Update the existing placeholder or last assistant message
           updatedMessages[lastAssistantIndex] = {
             ...updatedMessages[lastAssistantIndex],
@@ -200,6 +220,8 @@ export const useChatMessages = (
             tokens_per_second: data.tokens_per_second,
             model: data.model,
             provider: data.provider,
+            // Add tool_calls if they exist in the data
+            tool_calls: data.tool_calls || updatedMessages[lastAssistantIndex].tool_calls,
             // Update document_ids if they arrive during streaming
             document_ids: data.document_ids || updatedMessages[lastAssistantIndex].document_ids,
             // Update id if it wasn't set before (e.g., placeholder) or if backend provides it
@@ -215,10 +237,61 @@ export const useChatMessages = (
         return { ...prev, messages: updatedMessages };
       });
 
+      // Add handling for tool result messages
+      if (data.role === 'tool') {
+        setCurrentChat((prev: Chat | null) => {
+          if (!prev || !prev.messages) return prev;
+          
+          // Find the assistant message that contains the tool call
+          const assistantMessage = prev.messages.find((msg: Message) =>
+            msg.role === 'assistant' &&
+            msg.tool_calls &&
+            msg.tool_calls.some((tc: any) => tc.id === data.tool_call_id)
+          );
+          
+          // Add the tool result message to the messages array
+          const toolResultMessage: Message = {
+            id: typeof data.id === 'string' ? parseInt(data.id, 10) : data.id,
+            chat_id: typeof prev.id === 'string' ? parseInt(prev.id, 10) : prev.id,
+            role: 'tool',
+            content: data.content,
+            tool_call_id: data.tool_call_id,
+            created_at: data.created_at || new Date().toISOString(),
+          };
+          
+          const updatedMessages = [...prev.messages, toolResultMessage];
+          
+          // Update all messages to include parentMessages reference
+          // We need to avoid circular references, so we'll only include necessary fields
+          const messagesWithParents = updatedMessages.map((msg: Message) => {
+            // Create a simplified version of the messages for the parentMessages property
+            // to avoid circular references and excessive memory usage
+            const parentMsgs = updatedMessages.map((parentMsg: Message) => ({
+              id: parentMsg.id,
+              role: parentMsg.role,
+              content: parentMsg.content,
+              tool_call_id: parentMsg.tool_call_id,
+              tool_calls: parentMsg.tool_calls
+            }));
+            
+            return {
+              ...msg,
+              parentMessages: parentMsgs
+            };
+          });
+          
+          // Set needsRefresh to true to trigger a refresh after tool call
+          setNeedsRefresh(true);
+          
+          return { ...prev, messages: messagesWithParents as Message[] };
+        });
+      }
+
       if (data.done) {
         console.log('Received final chunk.');
         closeEventSource();
         setIsStreaming(false);
+        setIsWaitingForResponse(false); // Ensure waiting state is reset when done
         // Refresh the chat list to ensure title/timestamp updates are reflected
         loadChats();
         // Refresh the current chat to get final message IDs and potentially other updates
@@ -228,7 +301,7 @@ export const useChatMessages = (
             const fetchedChat = result.chat; // Assign to a constant first
             if (fetchedChat) { // Check the constant
               console.log('Refreshed current chat data from backend:', fetchedChat.id);
-              setCurrentChat((prevChat): Chat | null => { // Explicitly define return type
+              setCurrentChat((prevChat: Chat | null): Chat | null => { // Explicitly define return type
                 // If there's no previous chat, or the ID doesn't match the fetched chat,
                 // use the newly fetched chat directly. fetchedChat is guaranteed non-null here.
                 if (!prevChat || prevChat.id !== fetchedChat.id) { // Use the constant
@@ -238,13 +311,13 @@ export const useChatMessages = (
                 // --- If we are here, prevChat exists and IDs match. Merge messages. ---
 
                 // Create a map of previous messages for efficient lookup
-                const prevMessagesMap = new Map(prevChat.messages?.map(msg => [msg.id, msg]));
+                const prevMessagesMap = new Map(prevChat.messages?.map((msg: Message) => [msg.id, msg]));
 
                 // Ensure fetched messages is an array
                 const fetchedMessages = fetchedChat.messages || []; // Use the constant
 
                 // Map over fetched messages and merge with previous ones if necessary
-                const finalMessages = fetchedMessages.map(fetchedMsg => {
+                const finalMessages = fetchedMessages.map((fetchedMsg: Message) => {
                   const prevMsg = prevMessagesMap.get(fetchedMsg.id);
 
                   // If a previous message exists and it's an assistant message, merge token data
@@ -285,6 +358,7 @@ export const useChatMessages = (
       setError('Error processing streaming response');
       closeEventSource();
       setIsStreaming(false);
+      setIsWaitingForResponse(false); // Reset waiting state on error
     }
   };
 
@@ -300,6 +374,7 @@ export const useChatMessages = (
     showNotification(errorMessage, 'error');
     closeEventSource();
     setIsStreaming(false);
+    setIsWaitingForResponse(false); // Reset waiting state on error
   };
 
 
@@ -360,7 +435,7 @@ export const useChatMessages = (
       created_at: new Date().toISOString(),
     };
 
-    setCurrentChat(prev => ({
+    setCurrentChat((prev: Chat | null) => ({
       ...(prev || chatToUpdate!), // Use chatToUpdate if prev is null
       messages: [...(prev?.messages || chatToUpdate!.messages || []), userMessage, assistantMessage],
     }));
@@ -379,9 +454,9 @@ export const useChatMessages = (
         console.log('Updating chat title based on first message:', newTitle);
         const updateResult = await updateChat(chatId, { title: newTitle });
         if (updateResult.success) {
-          setCurrentChat(prev => prev ? { ...prev, title: newTitle } : null);
-          setChats(prevChats => // Update title in the main list as well
-            prevChats.map(c => c.id === chatId ? { ...c, title: newTitle } : c)
+          setCurrentChat((prev: Chat | null) => prev ? { ...prev, title: newTitle } : null);
+          setChats((prevChats: Chat[]) => // Update title in the main list as well
+            prevChats.map((c: Chat) => c.id === chatId ? { ...c, title: newTitle } : c)
           );
           console.log('Successfully updated chat title in backend');
         } else {
@@ -393,39 +468,304 @@ export const useChatMessages = (
       // Set waiting state before starting stream
       setIsWaitingForResponse(true);
 
-      // 6. Setup and start EventSource
-      const eventSource = setupEventSource(chatId, messageContent, contextDocuments);
-      eventSource.onmessage = handleEventMessage;
-      eventSource.onerror = handleEventError;
+      // Check if the message is likely to trigger a tool call
+      const isFetchToolCall = messageContent.toLowerCase().includes('fetch') &&
+        (messageContent.toLowerCase().includes('http://') || messageContent.toLowerCase().includes('https://'));
+      
+      // Detect other potential tool calls - expanded to catch more cases
+      const isToolCall = isFetchToolCall ||
+        messageContent.toLowerCase().includes('use tool') ||
+        messageContent.toLowerCase().includes('search for') ||
+        messageContent.toLowerCase().includes('find information') ||
+        messageContent.toLowerCase().includes('mcp') ||
+        messageContent.toLowerCase().includes('tool call');
+      
+      console.log('Message content:', messageContent);
+      console.log('Is tool call detected:', isToolCall);
 
-      announce({ message: 'Message sent, waiting for response', politeness: 'polite' });
+      if (isToolCall) {
+        console.log('Detected potential tool call, disabling streaming');
+        
+        // For tool calls, use the API utilities instead of direct fetch
+        console.log('Using API utilities for potential tool call');
+        
+        // Use post from api.ts which automatically handles authentication
+        const apiResponse = await post<any>(`/chats/${chatId}/messages`, {
+          role: 'user', // Add the role field
+          message: messageContent,
+          stream: false, // Disable streaming for tool calls
+          context_documents: contextDocuments
+        });
+        
+        // Check if the response has an error property
+        if (apiResponse.error) { // Line 500
+          console.error('API error response:', apiResponse.error); // Line 501
 
+          let errorMessage = 'Failed to send message';
+          let isAuthError = false;
+          // Attempt to get status from the response object if available (depends on api.ts implementation)
+          const status = (apiResponse as any).status || null;
+
+          // Safely check the error message, prioritizing specific fields
+          let errorDetail = (apiResponse as any).detail || (apiResponse as any).message || apiResponse.error;
+
+          if (typeof errorDetail === 'string') {
+            errorMessage = errorDetail;
+            // Check if this is an authentication error by status or content
+            const lowerCaseError = errorDetail.toLowerCase();
+            if (status === 401 ||
+                lowerCaseError.includes('not authenticated') ||
+                lowerCaseError.includes('unauthorized')) {
+              isAuthError = true;
+            }
+          } else if (typeof errorDetail === 'object' && errorDetail !== null) {
+            // If it's an object, try to get a message property or stringify
+            errorMessage = (errorDetail as any).message || JSON.stringify(errorDetail);
+            // Check for auth error primarily by status if the detail is an object
+            if (status === 401) {
+              isAuthError = true;
+            }
+            // Optional: Could also check stringified object content if needed
+            // const lowerCaseError = JSON.stringify(errorDetail).toLowerCase();
+            // if (!isAuthError && (lowerCaseError.includes('not authenticated') || lowerCaseError.includes('unauthorized'))) {
+            //   isAuthError = true;
+            // }
+          } else {
+            // Fallback if errorDetail is not a string or object
+            errorMessage = status ? `API Error: ${status}` : 'Unknown API Error';
+            // Ensure we check status 401 even in fallback
+            if (status === 401) {
+              isAuthError = true;
+            }
+          }
+
+          if (isAuthError) {
+            console.error('Authentication error:', errorMessage);
+            
+            // Check if the user is actually logged in before redirecting
+            const isLoggedIn = await checkAuthStatus();
+            
+            if (!isLoggedIn) {
+              // Only redirect if the user is not logged in
+              if (typeof window !== 'undefined') {
+                window.location.href = '/login?error=session_expired';
+                return; // Return early to prevent further processing
+              }
+            } else {
+              // User is logged in but got an auth error for this specific request
+              setError('Authentication error. Please try again.');
+              setIsWaitingForResponse(false);
+              return; // Return early as auth error handled locally
+            }
+          }
+          
+          // If it wasn't an auth error that caused a redirect/return, throw the processed error
+          // Ensure the error thrown is an Error object
+          // Convert non-string errors to string before creating Error object
+          const errorString = typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage);
+          throw new Error(errorString);
+        }
+
+        // Handle the non-streaming response
+        const data = apiResponse.data;
+        // Update the user message with the actual ID from the server
+        setCurrentChat((prev: Chat | null) => {
+          if (!prev || !prev.messages) return prev;
+          
+          // Find the temporary user message and update its ID
+          const updatedMessages = prev.messages.map(msg =>
+            msg.id === userMessage.id ? { ...msg, id: data.user_message_id } : msg
+          );
+          
+          // Find the temporary assistant message and replace it with the actual response
+          const assistantIndex = updatedMessages.findIndex(msg => msg.id === assistantMessage.id);
+          if (assistantIndex !== -1) {
+            updatedMessages[assistantIndex] = {
+              id: data.id,
+              chat_id: typeof chatId === 'string' ? parseInt(chatId, 10) : chatId,
+              role: 'assistant',
+              content: data.content,
+              tokens: data.tokens,
+              tokens_per_second: data.tokens_per_second,
+              model: data.model,
+              provider: data.provider,
+              tool_calls: data.tool_calls,
+              document_ids: data.document_ids,
+              created_at: data.created_at,
+            };
+          }
+          
+          // Add tool result messages if any
+          if (data.tool_results && data.tool_results.length > 0) {
+            data.tool_results.forEach((toolResult: any) => {
+              updatedMessages.push({
+                id: typeof toolResult.id === 'string' ? parseInt(toolResult.id, 10) : toolResult.id,
+                chat_id: typeof chatId === 'string' ? parseInt(chatId, 10) : chatId,
+                role: 'tool',
+                content: toolResult.content,
+                tool_call_id: toolResult.tool_call_id,
+                created_at: toolResult.created_at || new Date().toISOString(),
+              });
+            });
+          }
+          
+          return {
+            ...prev,
+            messages: updatedMessages,
+          };
+        });
+        
+        setIsStreaming(false);
+        setIsWaitingForResponse(false);
+        
+        // Refresh the chat to ensure we have the latest state
+        refreshChat();
+        
+        // Refresh the chat list to ensure title/timestamp updates are reflected
+        loadChats();
+        
+        announce({ message: 'Response with tool call completed', politeness: 'polite' });
+      } else {
+        // For regular messages, use streaming as before
+        const eventSource = setupEventSource(chatId, messageContent, contextDocuments);
+        eventSource.onmessage = handleEventMessage;
+        eventSource.onerror = (error) => {
+          handleEventError(error);
+          
+          // Check if this might be an authentication error
+          // EventSource doesn't provide detailed error information, so we need to check auth status
+          checkAuthStatus().then(isAuthenticated => {
+            if (!isAuthenticated) {
+              // Authentication error - only redirect if actually not authenticated
+              if (typeof window !== 'undefined') {
+                window.location.href = '/login?error=session_expired';
+              }
+            } else {
+              // User is authenticated but still got an error
+              // This might be a temporary issue, so just show an error message
+              setError('Connection error. Please try again.');
+              setIsWaitingForResponse(false);
+            }
+          });
+        };
+
+        announce({ message: 'Message sent, waiting for response', politeness: 'polite' });
+      }
     } catch (err) {
       console.error('Error sending message:', err);
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      
+      // Parse the error
+      let errorMessage = 'An error occurred';
+      let errorDetails = null;
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        errorDetails = err;
+      } else if (typeof err === 'object' && err !== null) {
+        // Use type assertion to tell TypeScript that err might have a message property
+        errorMessage = (err as { message?: string }).message || JSON.stringify(err);
+        errorDetails = err;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
       setError(`Failed to send message: ${errorMessage}`);
       showNotification(`Failed to send message: ${errorMessage}`, 'error');
+      
+      // Check if this was a tool call
+      const isToolCall = currentChat?.messages && currentChat.messages.some(msg =>
+        msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0
+      );
+      
+      // If this was a tool call, set the error for the specific tool
+      if (isToolCall && currentChat?.messages) {
+        const lastAssistantMessage = [...currentChat.messages]
+          .reverse()
+          .find(msg => msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0);
+        
+        if (lastAssistantMessage && lastAssistantMessage.tool_calls) {
+          // Set error for each tool call in the message
+          lastAssistantMessage.tool_calls.forEach(toolCall => {
+            setToolErrors((prev: {[key: string]: any}) => ({
+              ...prev,
+              [toolCall.id]: errorDetails || errorMessage
+            }));
+          });
+        }
+      }
+      
       // Rollback optimistic UI updates? Remove placeholder messages?
-      setCurrentChat(prev => {
+      setCurrentChat((prev: Chat | null) => {
           if (!prev) return null;
           // Remove the last two messages (user + assistant placeholder)
           const messages = prev.messages?.slice(0, -2) || [];
           return {...prev, messages };
       });
       setIsStreaming(false);
+      setIsWaitingForResponse(false); // Reset waiting state on error
       closeEventSource();
     }
   };
 
+// Function to check authentication status
+const checkAuthStatus = async (): Promise<boolean> => {
+  try {
+    // First, check if we have a token
+    const token = getToken();
+    if (!token) {
+      console.error('No token found in storage');
+      return false;
+    }
+    
+    console.log('Checking auth status with token:', token.substring(0, 10) + '...');
+    
+    // Then, check if the token is valid by making a request to the auth check endpoint
+    const response = await fetch('/api/v1/auth/check', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    const isAuthenticated = response.ok;
+    console.log('Auth check response:', response.status, 'Authenticated:', isAuthenticated);
+    
+    return isAuthenticated;
+  } catch (error) {
+    console.error('Error checking authentication status:', error);
+    return false;
+  }
+};
 
-  return {
-    isStreaming,
-    isWaitingForResponse, // Add new state to return object
-    error,
-    messagesEndRef,
-    handleSendMessage,
-    handleFeedback,
-    handleUpdateMessage,
-    closeEventSource,
-  };
+// Add a function to refresh the chat data
+const refreshChat = async () => {
+  if (!currentChat?.id) return;
+  
+  try {
+    console.log('Refreshing chat data for chat ID:', currentChat.id);
+    const { chat, error: fetchError } = await getChat(currentChat.id);
+    
+    if (fetchError) {
+      throw new Error(fetchError);
+    }
+    
+    if (chat) {
+      setCurrentChat(chat);
+      console.log('Chat data refreshed successfully');
+    }
+  } catch (error) {
+    console.error('Error refreshing chat:', error);
+  }
+};
+return {
+  isStreaming,
+  isWaitingForResponse, // Add new state to return object
+  error,
+  messagesEndRef,
+  handleSendMessage,
+  handleFeedback,
+  handleUpdateMessage,
+  closeEventSource,
+  refreshChat, // Expose the refresh function
+  toolErrors // Expose tool errors
+};
 };

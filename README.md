@@ -16,67 +16,71 @@ This application provides a user interface for:
 - **Database:** (Inferred from migrations - likely PostgreSQL or similar)
 - **LLM Integration:** Supports multiple LLMs (OpenAI, Anthropic, Ollama, etc.)
 - **Vector Database:** (Inferred from code - likely FAISS)
-- **Deployment:** Docker, Docker Compose
+- **Deployment:** Docker, Docker Compose, Makefile
 
-## Production Setup (Docker Compose)
+## Environment Setup
 
-The production setup uses Docker Compose to run the application in a containerized environment.
+This project uses environment variables for configuration, particularly for secrets like API keys and the application `SECRET_KEY`.
 
-**`docker-compose.prod.yml` Configuration:**
-
--   Defines a single service named `app`.
--   Builds the application from the root `Dockerfile`.
--   Exposes ports 3000 (frontend) and 8000 (backend).
--   Uses bind mounts for the application code:
-    -   `./:/app`: Mounts the entire project directory.
-    -   Excludes build artifacts and dependencies: `/app/frontend/.next`, `/app/frontend/node_modules`, `/app/backend/__pycache__`.
--   Sets environment variables:
-    -   `NODE_ENV=production`
-    -   `PYTHONPATH=/app`
-    -   `FASTAPI_ENV=production`
-    -   Database connection settings (if applicable)
-    -   LLM service API keys (OpenAI, Anthropic, etc.)
-    -   Secret key and other security-related settings.
--   Uses `/app/entrypoint.prod.sh` as the entrypoint.
--   Restarts the service unless stopped (`restart: unless-stopped`).
-
-**`entrypoint.prod.sh` Script:**
-
--   Installs backend and frontend dependencies.
--   Runs database migrations using Alembic.
--   Builds the frontend for production (`npm run build`).
--   Starts the backend server using Uvicorn:
-    -   `uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4 --timeout-keep-alive 300`
--   Starts the frontend server using `npm run start`.
--   Handles shutdown signals (SIGTERM, SIGINT) to gracefully stop the services.
-
-**Running in Production:**
-
-1.  Set the necessary environment variables in a `.env` file or directly in your shell. You'll need to provide API keys for the LLM services you want to use and a strong `SECRET_KEY`.
-2.  Run `docker compose -f docker-compose.prod.yml up --build` to build and start the application.
-
-## Development Setup
-
-1.  Clone the repository: `git clone <repository_url>`
-2.  Navigate to the project directory: `cd doogie6`
-3.  Install backend dependencies:
+1.  **Copy Example:** Copy the `.env.example` file to `.env.dev` for development and `.env.prod` for production.
     ```bash
-    cd backend
-    pip install -r requirements.txt
+    cp .env.example .env.dev
+    cp .env.example .env.prod
     ```
-4.  Install frontend dependencies:
-    ```bash
-    cd ../frontend
-    npm install
-    ```
-5.  Run database migrations:
-    ```bash
-    cd ../backend
-    python -m alembic upgrade head
-    ```
-6.  Start the development servers:
-    - You can use the `docker-compose.yml` file for a combined development environment. This will automatically rebuild and reload on code changes.
-    - Run `docker compose up --build`
+2.  **Edit Files:** Edit `.env.dev` and `.env.prod` to add your specific API keys (OpenAI, Anthropic, etc.) and generate a strong, unique `SECRET_KEY` for each environment.
+    *   **Important:** The `SECRET_KEY` is crucial for security and **must** be set in both `.env.dev` and `.env.prod`.
+3.  **Git Ignore:** These `.env.*` files are included in `.gitignore` and should **never** be committed to version control.
+
+The `Makefile` automatically loads the appropriate `.env.*` file based on the `ENV` variable (defaulting to `dev`).
+
+## Running the Application (Docker & Makefile)
+
+The primary way to build, run, and manage the application is through the provided `Makefile` targets, which leverage Docker and Docker Compose for a consistent environment.
+
+**Prerequisites:**
+*   Docker Engine
+*   Docker Compose (V2 `docker compose` or V1 `docker-compose`)
+
+**Key Makefile Targets:**
+
+*   `make docker-build`: Builds the Docker image using layer caching (recommended for faster builds). Tags as `latest`, version, and git hash.
+*   `make docker-build-fresh`: Builds the Docker image without using cache.
+*   `make docker-up`: Starts the application containers in **development** mode (using `docker-compose.yml` and `.env.dev`). Builds the image if not present. Waits for services to become healthy.
+*   `make ENV=prod docker-up`: Starts the application containers in **production** mode (using `docker-compose.prod.yml` and `.env.prod`). Builds the image if not present. Waits for services to become healthy.
+*   `make docker-down`: Stops the running application containers (uses `ENV` to determine which compose file).
+*   `make docker-lint`: Runs linters for backend and frontend inside the Docker container.
+*   `make docker-format`: Formats code for backend and frontend inside the Docker container.
+*   `make docker-test`: Runs tests for backend and frontend inside the Docker container.
+*   `make docker-security`: Runs security checks (bandit, npm audit) inside the Docker container.
+*   `make migrate`: Runs database migrations (Alembic) inside the Docker container.
+*   `make ci`: Runs a sequence of checks suitable for Continuous Integration (lint, security, test).
+*   `make help`: Displays all available Makefile targets.
+
+**Development Workflow:**
+
+1.  Ensure prerequisites are installed.
+2.  Create and populate `.env.dev` (see Environment Setup).
+3.  Run `make docker-up`. This will:
+    *   Build the image using the local `Dockerfile` if necessary.
+    *   Start the container using `docker-compose.yml`.
+    *   Mount local code (`./backend`, `./frontend`) into the container for live reloading.
+    *   Run the unified `entrypoint.sh` script, which installs dependencies (if needed) and starts dev servers.
+4.  Access the frontend at `http://localhost:3000` and the backend API at `http://localhost:8000`.
+5.  To stop: `make docker-down`.
+
+**Production Workflow:**
+
+1.  Ensure prerequisites are installed.
+2.  Create and populate `.env.prod` with production secrets.
+3.  Build the image: `make docker-build` (or `make docker-build-fresh`).
+4.  Push the image to a registry (optional but recommended): `make docker-push` (ensure `IMAGE_NAME` in Makefile points to your registry).
+5.  Start the container: `make ENV=prod docker-up`. This uses `docker-compose.prod.yml` and the pre-built image (if `IMAGE_NAME` matches).
+6.  To stop: `make ENV=prod docker-down`.
+
+**Docker Socket Mount:**
+The `docker-compose.yml` file mounts the host's Docker socket (`/var/run/docker.sock`) into the container.
+*   **Purpose:** This is required for certain Model Context Protocol (MCP) servers running within the application container that need to interact with the Docker daemon (e.g., to start other containers).
+*   **Security Warning:** Mounting the Docker socket effectively grants the container root-level access to the host system via the Docker daemon. This is a significant security risk. Only run this configuration in trusted environments and be aware of the implications.
 
 ## Memory Bank
 This project utilizes a memory bank system to maintain context and documentation across sessions. The memory bank consists of Markdown files located in the `memory-bank/` directory. These files contain information about the project's goals, architecture, context, and progress. Key files include:
