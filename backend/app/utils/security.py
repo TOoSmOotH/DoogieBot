@@ -28,9 +28,22 @@ def create_access_token(subject: Union[str, Any], expires_delta: Optional[timede
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-def create_refresh_token(subject: Union[str, Any]) -> str:
-    """Create a JWT refresh token with longer expiration."""
-    expire = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+def create_refresh_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT refresh token with longer expiration.
+    
+    Args:
+        subject: The subject of the token (usually user ID)
+        expires_delta: Optional custom expiration time. If not provided, uses the default from settings.
+    
+    Returns:
+        str: The encoded JWT refresh token
+    """
+    if expires_delta:
+        expire = datetime.now(UTC) + expires_delta
+    else:
+        expire = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    
     to_encode = {"exp": expire, "sub": str(subject), "refresh": True}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt

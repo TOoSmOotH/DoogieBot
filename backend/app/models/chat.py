@@ -8,6 +8,7 @@ class MessageRole(str, enum.Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+    TOOL = "tool"
 
 class FeedbackType(str, enum.Enum):
     POSITIVE = "positive"

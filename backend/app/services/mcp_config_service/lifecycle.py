@@ -27,7 +27,30 @@ def start_server(db: Session, config_id: str) -> Optional[MCPServerStatus]:
             error_message="Configuration not found or disabled" if not db_config else "Configuration disabled"
         )
     try:
-        docker_client = _get_docker_client()
+        # Add retry logic for Docker client initialization
+        max_retries = 3
+        retry_delay = 2
+        retry_count = 0
+        docker_client = None
+        last_exception = None
+
+        while retry_count < max_retries:
+            try:
+                docker_client = _get_docker_client()
+                break  # Successfully got the Docker client, exit the loop
+            except Exception as e:
+                last_exception = e
+                retry_count += 1
+                logger.warning(f"Failed to initialize Docker client (attempt {retry_count}/{max_retries}): {e}")
+                if retry_count < max_retries:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+        
+        # If all retries failed, raise an exception
+        if docker_client is None:
+            error_msg = f"Failed to initialize Docker client after {max_retries} attempts"
+            logger.error(error_msg)
+            raise Exception(f"{error_msg}: {last_exception}")
         container_name = _get_container_name(config_id)
         container_to_create = True # Flag to indicate if we need to create a new container
 

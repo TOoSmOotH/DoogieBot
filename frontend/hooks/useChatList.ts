@@ -102,6 +102,27 @@ export const useChatList = (
   }, [searchTerm, selectedFilterTags, chats]);
 
   const handleNewChat = async () => {
+    // Check if there's already a "New Conversation" chat that hasn't been used yet
+    const existingNewChat = chats.find(chat =>
+      chat.title === 'New Conversation' &&
+      (!chat.messages || chat.messages.length === 0)
+    );
+
+    if (existingNewChat) {
+      // Use the existing empty chat instead of creating a new one
+      console.log('Using existing empty chat:', existingNewChat);
+      setCurrentChat(null);
+      router.push(`/chat?id=${existingNewChat.id}`, undefined, { shallow: true });
+      
+      // Announce for screen readers
+      announce({
+        message: 'New chat selected',
+        politeness: 'polite'
+      });
+      
+      return;
+    }
+
     // Clear relevant state handled by other hooks/component
     setCurrentChat(null);
     setError(null);

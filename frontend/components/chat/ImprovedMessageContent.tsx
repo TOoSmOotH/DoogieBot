@@ -4,6 +4,7 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import ToolCallDisplay from './ToolCallDisplay';
 // Removed duplicate Button import
 
 // Define a simple custom style to replace dracula
@@ -80,6 +81,7 @@ const customDraculaStyle = {
 };
 import { Message } from '@/types';
 import { parseThinkTags } from '@/utils/thinkTagParser';
+import { useCurrentChat } from '@/hooks/useCurrentChat';
 import { FeedbackType } from '@/components/chat/FeedbackButton'; // Import FeedbackType
 import Tooltip from '@/components/ui/CustomTooltip';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -112,6 +114,67 @@ const ImprovedMessageContent: React.FC<MessageContentProps> = ({
   const [showNegativeFeedbackInput, setShowNegativeFeedbackInput] = useState(false);
   const [negativeFeedbackComment, setNegativeFeedbackComment] = useState('');
   const messageRef = useRef<HTMLDivElement>(null);
+  const [toolErrors, setToolErrors] = useState<{[key: string]: any}>({});
+  const [retryingTools, setRetryingTools] = useState<{[key: string]: boolean}>({});
+  const currentChatHook = useCurrentChat(
+    null,
+    () => {} // Dummy function for setChats parameter
+  );
+
+  // Handle retrying a tool call
+  const handleRetryToolCall = async (toolCall: any) => {
+    if (!currentChatHook || !currentChatHook.currentChat || !toolCall.id) return;
+    
+    try {
+      setRetryingTools(prev => ({ ...prev, [toolCall.id]: true }));
+      
+      // Call the API to retry the tool call
+      const response = await fetch(`/api/v1/chats/${currentChatHook.currentChat.id}/retry-tool`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tool_call_id: toolCall.id,
+          function_name: toolCall.function?.name || toolCall.name,
+          arguments: toolCall.function?.arguments || toolCall.arguments,
+        }),
+      });
+      
+      if (!response.ok) {
+        // Try to parse the error as JSON
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          // If it's not JSON, get the text
+          const errorText = await response.text();
+          errorData = { message: errorText || 'Failed to retry tool call' };
+        }
+        
+        // Add status code to the error
+        errorData.status = response.status;
+        
+        throw errorData;
+      }
+      
+      // Refresh the chat to get the updated tool result
+      if (currentChatHook.loadSpecificChat && currentChatHook.currentChat.id) {
+        await currentChatHook.loadSpecificChat(currentChatHook.currentChat.id);
+      }
+      
+      showNotification('Tool call retried successfully', 'success');
+    } catch (error) {
+      console.error('Error retrying tool call:', error);
+      showNotification('Failed to retry tool call', 'error');
+    } finally {
+      setRetryingTools(prev => {
+        const newRetrying = { ...prev };
+        delete newRetrying[toolCall.id];
+        return newRetrying;
+      });
+    }
+  };
 
   // Parse think tags using memoization to avoid unnecessary re-parsing
   const parts = useMemo(() => parseThinkTags(content), [content]);
@@ -406,6 +469,36 @@ const ImprovedMessageContent: React.FC<MessageContentProps> = ({
               </div>
             ) : (
               <div key={index} className={message.role === 'user' ? 'user-message-content' : 'assistant-message-content'}>
+                {/* Display tool calls if present */}
+                {message.role === 'assistant' && message.tool_calls && message.tool_calls.length > 0 && (
+                  <div className="tool-calls-container mb-4">
+                    {message.tool_calls.map((toolCall, idx) => {
+                      // Find the corresponding tool result message
+                      const toolResult = currentChatHook?.currentChat?.messages?.find(
+                        msg => msg.role === 'tool' && msg.tool_call_id === toolCall.id
+                      );
+                      
+                      // Add console log to debug
+                      console.log('Tool call:', toolCall);
+                      console.log('Tool result:', toolResult);
+                      
+                      return (
+                        <ToolCallDisplay
+                          key={`tool-call-${idx}`}
+                          message={message}
+                          toolCall={toolCall}
+                          toolResult={toolResult}
+                          isLoading={isWaitingForResponse && !toolResult}
+                          onRetry={handleRetryToolCall}
+                          error={toolErrors[toolCall.id]}
+                          isRetrying={retryingTools[toolCall.id]}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {/* Display regular content */}
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}

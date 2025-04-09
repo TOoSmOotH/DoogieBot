@@ -86,7 +86,7 @@ create_fetch_tool() {
 {
   "name": "fetch",
   "command": "docker",
-  "args": ["run", "-i", "--rm", "mcp/fetch"],
+  "args": ["run", "-i", "--rm", "--dns", "8.8.8.8", "--dns", "8.8.4.4", "mcp/fetch"],
   "enabled": true
 }
 EOF
@@ -121,7 +121,7 @@ update_fetch_tool() {
   PAYLOAD_FILE=$(mktemp)
   cat > $PAYLOAD_FILE << EOF
 {
-  "args": ["run", "-i", "--rm", "mcp/fetch"],
+  "args": ["run", "-i", "--rm", "--dns", "8.8.8.8", "--dns", "8.8.4.4", "mcp/fetch"],
   "enabled": true
 }
 EOF

@@ -67,14 +67,21 @@ class MCPSessionManager:
 
         args = config.get("args", [])
         # Ensure docker run uses -i if applicable (important for stdio)
-        if command_path == "docker" and "run" in args and "-i" not in args:
-            try:
-                run_idx = args.index("run")
-                # Insert '-i' right after 'run'
-                args.insert(run_idx + 1, "-i")
-                logger.debug("Ensured '-i' flag is present for 'docker run'")
-            except ValueError:
-                pass # 'run' not found
+        if command_path == "docker" or command_path.endswith("/docker"):
+            # Add --host flag to connect to dind-server
+            if "--host" not in args and "-H" not in args:
+                args.insert(0, "--host=tcp://dind-server:2375")
+                logger.debug("Added '--host=tcp://dind-server:2375' flag to docker command")
+            
+            # Ensure -i flag is present for docker run
+            if "run" in args and "-i" not in args:
+                try:
+                    run_idx = args.index("run")
+                    # Insert '-i' right after 'run'
+                    args.insert(run_idx + 1, "-i")
+                    logger.debug("Ensured '-i' flag is present for 'docker run'")
+                except ValueError:
+                    pass # 'run' not found
 
         # Use os.environ as base, override with config env, ensuring config env is a dict
         config_env = config.get("env") or {} # Ensure we have a dict, even if env is None/null

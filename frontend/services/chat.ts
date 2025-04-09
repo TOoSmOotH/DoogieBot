@@ -1,5 +1,5 @@
 import { Chat, Feedback, Message, PaginatedResponse, PaginationParams, Tag } from '@/types';
-import { del, get, getPaginated, post, put, getApiUrl } from './api';
+import { del, get, getPaginated, post, put, getApiUrl, getToken } from './api';
 
 // Use getUserTags() instead to get tags from the backend
 // Empty array to avoid errors in case API isn't yet available
@@ -17,7 +17,7 @@ export const getUserTags = async (): Promise<{
   console.log('Fetching user tags');
 
   // Check authentication
-  const token = localStorage.getItem('token');
+  const token = getToken();
   if (!token) {
     console.error('No authentication token found');
     return { error: 'Authentication failed. Please log in again.', tags: [] };
@@ -367,11 +367,16 @@ export const streamMessage = async (
   onError: (error: string) => void
 ): Promise<void> => {
   try {
+    // Check if the message contains keywords likely to trigger tool calls
+    // --- Removed problematic check for mightTriggerToolCall ---
+    // All messages will now go through the streaming endpoint below,
+    // which correctly handles the backend logic for potential tool calls.
+
     // Note: We don't need to add the user message here as it's already added in the backend
     // and we're adding it to the UI in the chat component
     
     // Get token for authentication
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) {
       throw new Error('No authentication token found');
     }

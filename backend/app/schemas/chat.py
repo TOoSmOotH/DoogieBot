@@ -177,3 +177,9 @@ class StreamingResponseChunk(BaseModel):
 # This schema might not be directly used as an API response_model
 # but serves as a reference for the structure yielded by stream_llm_response
 # and potentially consumed by the frontend.
+
+# Tool retry request schema
+class ToolRetryRequest(BaseModel):
+    tool_call_id: str = Field(..., description="ID of the tool call to retry")
+    function_name: str = Field(..., description="Name of the function to call")
+    arguments: str = Field(..., description="Arguments for the function call as a JSON string")

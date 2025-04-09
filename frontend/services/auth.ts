@@ -31,8 +31,15 @@ export const login = async (email: string, password: string, options?: LoginOpti
     console.log('Login URL:', url);
     console.log('Form data:', Object.fromEntries(formData));
 
+    // Add remember_me to the URL parameters
+    const urlWithParams = options?.rememberMe
+      ? `${url}?remember_me=true`
+      : url;
+    
+    console.log('Login URL with params:', urlWithParams);
+    
     // Use direct axios call to bypass our API layer's automatic trailing slash addition
-    const response = await fetch(url, {
+    const response = await fetch(urlWithParams, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',

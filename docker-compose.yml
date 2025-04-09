@@ -1,15 +1,28 @@
 services:
+  dind-server:
+    image: docker:dind
+    privileged: true
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--tls=false"] # Listen on TCP without TLS for simplicity
+    volumes:
+      - dind-storage:/var/lib/docker # Persist Docker data for the dind instance
+    networks:
+      - default # Ensure it's on the same network
+    restart: unless-stopped
+
   app:
     # Remove image: line and add build: section
     build:
       context: .
       dockerfile: Dockerfile
+      target: development # Explicitly target the development stage
       args:
         # Pass the host's Docker GID. Found using: getent group docker | cut -d: -f3
         DOCKER_GID: 984
         # You can also pass USER_ID and GROUP_ID if needed, otherwise defaults from Dockerfile are used
         # USER_ID: 1000
         # GROUP_ID: 1000
+    depends_on:
+      - dind-server
     ports:
       - "3000:3000"  # Frontend
       - "8000:8000"  # Backend API
@@ -17,13 +30,12 @@ services:
       # Use more specific bind mounts for development
       - ./backend:/app/backend  # Bind mount for backend development
       - ./frontend:/app/frontend  # Bind mount for frontend development
-      # --- MODIFIED: Use Docker Desktop socket path ---
-      - /home/vtriple/.docker/desktop/docker.sock k:/var/run/docker.sock  # Mount Docker socket THIS HASTO BE THE PATH FOR YOUR DOCKER DESKTOP
-      # --- END MODIFIED ---
+      # --- MODIFIED: Use Docker Desktop socket path (with 60s delay in entrypoint.sh) ---
+      # Removed host Docker socket mount, will connect to dind-server instead
       - ./data/db:/app/data/db  # Persist database files
       - ./data/indexes:/app/data/indexes  # Persist index files
       - ./entrypoint.sh:/app/entrypoint.sh  # Mount the entrypoint script
-      - /app/.venv # Use anonymous volume for venv outside backend mount
+      # - /app/.venv # Removed anonymous volume for venv; use the one built into the image
       - /app/frontend/node_modules # Use anonymous volume for node_modules
       # Removed anonymous volume for pnpm store; let it use node_modules
       # Exclude build artifacts from host machine
@@ -72,3 +84,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  dind-storage: {} # Define the named volume for dind-server persistence

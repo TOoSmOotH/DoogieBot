@@ -63,6 +63,7 @@ WORKDIR /app
 COPY backend/pyproject.toml backend/requirements.txt /app/backend/
 
 # Install Python dependencies using UV
+ENV UV_HTTP_TIMEOUT=300
 RUN cd /app/backend && \
     uv venv /app/.venv && \
     uv pip install -e . && \
@@ -134,9 +135,9 @@ RUN apt-get update && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
     apt-get update && \
     apt-get install -y nodejs docker-ce-cli && \
+    # pnpm will be installed by entrypoint.sh if needed
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    npm install -g pnpm
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -155,8 +156,12 @@ RUN uv venv /app/.venv
 # Copy backend dependency files first
 COPY backend/pyproject.toml backend/requirements.txt backend/uv.lock* /app/backend/
 # Install backend dev dependencies BEFORE copying all source code
+ENV UV_HTTP_TIMEOUT=300
 RUN cd /app/backend && \
-    uv pip install -e ".[dev]"
+    uv pip install -e ".[dev]" && \
+    echo "--- Contents of /app/.venv/bin after dev install ---" && \
+    ls -la /app/.venv/bin && \
+    echo "--- End of /app/.venv/bin contents ---"
 
 # Copy frontend dependency files
 COPY frontend/package.json frontend/pnpm-lock.yaml /app/frontend/
@@ -205,7 +210,7 @@ RUN echo 'exclude_dirs: ["/venv", "/tests"]' > /app/backend/bandit.yaml
 # Environment variables for development
 ENV NODE_ENV=development \
     FASTAPI_ENV=development \
-    PNPM_HOME=".local/share/pnpm" \
+    # PNPM_HOME removed, using standard install path below
     PATH="/app/.venv/bin:${PATH}" \
     # MCP configuration
     MCP_NETWORK=mcp-network \
@@ -213,7 +218,10 @@ ENV NODE_ENV=development \
     MCP_ENABLE_DOCKER=true
 
 # Add pnpm to PATH
-ENV PATH="${PNPM_HOME}:${PATH}"
+# pnpm should be globally available in PATH from the curl install, no need for user-specific path mod
+
+# Ensure UV cache directory exists and has correct permissions BEFORE switching user
+RUN mkdir -p /app/.uv-cache && chown -R ${USER_ID}:${GROUP_ID} /app/.uv-cache
 
 # Switch to configured user AFTER all root operations (installations, chown) are done
 USER ${USER_ID}:${GROUP_ID}
@@ -248,7 +256,7 @@ RUN apt-get update && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
     apt-get update && \
     apt-get install -y nodejs docker-ce-cli && \
-    npm install -g pnpm && \
+    curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/bash sh - && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -262,6 +270,7 @@ COPY backend/pyproject.toml backend/requirements.txt backend/uv.lock* /app/backe
 # Copy necessary backend source code for runtime BEFORE installing dependencies
 COPY backend/app /app/backend/app
 # Install backend production dependencies (no dev extras)
+ENV UV_HTTP_TIMEOUT=300
 RUN cd /app/backend && \
     uv pip install -e .
 

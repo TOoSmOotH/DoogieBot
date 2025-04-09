@@ -89,15 +89,20 @@ export const useCurrentChat = (
   // Load chat if ID is in URL
   useEffect(() => {
     const chatId = router.query.id ? String(router.query.id) : null;
-    if (chatId && chatId !== currentChat?.id) { // Only load if ID changes or is initially set
+    
+    // Always load the chat when the ID changes, even if it's the same as currentChat.id
+    // This ensures we get fresh data when navigating between chats
+    if (chatId) {
+        console.log(`useCurrentChat: URL chat ID changed to ${chatId}, loading chat`);
         loadSpecificChat(chatId);
     } else if (!chatId) {
         // If URL has no ID, clear the current chat
+        console.log('useCurrentChat: No chat ID in URL, clearing current chat');
         setCurrentChat(null);
         setIsEditingTitle(false); // Reset editing state
         setError(null);
     }
-  }, [router.query.id, isAuthenticated, loadSpecificChat]); // currentChat?.id removed to ensure reload if needed
+  }, [router.query.id, isAuthenticated, loadSpecificChat]); // Removed currentChat?.id dependency
 
   // Listen for custom event to edit title from the Layout component
   useEffect(() => {

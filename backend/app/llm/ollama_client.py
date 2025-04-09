@@ -31,6 +31,8 @@ class OllamaClient(LLMClient):
         """
         # Pass user_id to base class constructor
         super().__init__(model=model, api_key=api_key, base_url=base_url, embedding_model=embedding_model, user_id=user_id)
+        # Initialize detected_tool_calls to store tool calls detected during streaming
+        self.detected_tool_calls = None
         self.base_url = base_url or settings.OLLAMA_BASE_URL
         if not self.base_url:
             logger.warning("Ollama base URL is not set. API calls will likely fail.")
@@ -94,11 +96,18 @@ class OllamaClient(LLMClient):
         }
         if max_tokens: payload["options"]["num_predict"] = max_tokens
         if tools: payload["tools"] = tools
-        # tool_choice handling in options (model dependent)
-        if tools and tool_choice and tool_choice != "auto":
-             payload["options"]["tool_choice"] = tool_choice
-             logger.info(f"Passing tool_choice='{tool_choice}' in Ollama options.")
+        # Add tool_choice to the top level if tools are present
+        if tools:
+            # Default to "auto" if not provided or None, otherwise use the provided value
+            effective_tool_choice = tool_choice if tool_choice is not None else "auto"
+            payload["tool_choice"] = effective_tool_choice
+            logger.info(f"Passing tool_choice='{effective_tool_choice}' in Ollama payload.")
 
+        if tools:
+            try:
+                logger.debug(f"Sending tools payload to Ollama: {json.dumps(tools, indent=2)}") # Log the exact tools payload
+            except Exception as e:
+                logger.error(f"Error logging tools payload: {e}")
         if settings.LLM_DEBUG_LOGGING:
              try: logger.info(f"Ollama request payload:\n{json.dumps(payload, indent=2)}")
              except Exception as e: logger.error(f"Error logging Ollama payload: {e}")
@@ -109,7 +118,8 @@ class OllamaClient(LLMClient):
             return self._stream_response(url, headers, payload, start_time)
         else:
             # Non-streaming logic
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=60) # Explicit 60-second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status != 200:
                         error_text = await response.text()
@@ -153,7 +163,8 @@ class OllamaClient(LLMClient):
         start_time: float
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """ Stream response from Ollama. """
-        async with aiohttp.ClientSession() as session:
+        timeout = aiohttp.ClientTimeout(total=60) # Explicit 60-second timeout
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
@@ -168,6 +179,9 @@ class OllamaClient(LLMClient):
                 total_tokens = 0
                 finish_reason = "stop"
                 chunk_count = 0
+                
+                # Reset detected_tool_calls at the start of each stream
+                self.detected_tool_calls = None
 
                 yield {"type": "start", "role": "assistant", "model": self.model}
 
@@ -195,6 +209,15 @@ class OllamaClient(LLMClient):
                             # Handle potentially incremental tool calls from Ollama stream
                             logger.debug(f"Ollama stream received tool calls delta: {delta_tool_calls}")
                             yield_chunk["tool_calls_delta"] = delta_tool_calls # Pass delta through
+                            
+                            # Add an ID to each tool call if it doesn't have one
+                            for i, tool_call in enumerate(delta_tool_calls):
+                                if not tool_call.get("id"):
+                                    tool_call["id"] = f"call_{int(time.time())}_{i}"
+                            
+                            # Store the tool calls for access by llm_stream.py
+                            self.detected_tool_calls = delta_tool_calls
+                            logger.debug(f"Stored detected_tool_calls: {self.detected_tool_calls}")
                             
                             # Accumulate tool calls similar to llm_stream.py
                             for tool_call_delta in delta_tool_calls:
@@ -241,6 +264,11 @@ class OllamaClient(LLMClient):
                          yield {"type": "error", "error": str(e), "done": True}
                          return
 
+                # Store accumulated tool calls for access by llm_stream.py
+                if accumulated_tool_calls:
+                    self.detected_tool_calls = accumulated_tool_calls
+                    logger.debug(f"Stored detected tool calls: {self.detected_tool_calls}")
+                
                 # Yield final chunk
                 tokens_per_second = self.calculate_tokens_per_second(start_time, completion_tokens)
                 final_yield: Dict[str, Any] = {
@@ -259,7 +287,8 @@ class OllamaClient(LLMClient):
         """ List available models from Ollama. """
         try:
             url = f"{self.base_url}/api/tags"
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=60) # Explicit 60-second timeout
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url) as response:
                     if response.status != 200:
                         error_text = await response.text()
@@ -286,7 +315,8 @@ class OllamaClient(LLMClient):
                 if i % 10 == 0: logger.info(f"Processing Ollama embedding {i+1}/{len(texts)}")
                 payload = {"model": model_to_use, "prompt": text}
                 logger.debug(f"Sending embedding request to Ollama for text {i+1}: {text[:50]}...")
-                async with aiohttp.ClientSession() as session:
+                timeout = aiohttp.ClientTimeout(total=60) # Explicit 60-second timeout
+                async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.post(url, headers=headers, json=payload) as response:
                         if response.status != 200:
                             error_text = await response.text()

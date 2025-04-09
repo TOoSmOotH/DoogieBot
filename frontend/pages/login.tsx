@@ -17,6 +17,14 @@ const LoginPage: React.FC = () => {
   
   const { login, isAuthenticated } = useAuth();
   const router = useRouter();
+  const { error: errorParam } = router.query;
+
+  // Set error message based on query parameter
+  useEffect(() => {
+    if (errorParam === 'session_expired') {
+      setError('Your session has expired. Please log in again.');
+    }
+  }, [errorParam]);
 
   // Redirect if already authenticated
   useEffect(() => {

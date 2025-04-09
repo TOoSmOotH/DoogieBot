@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 def _get_docker_client():
     """ Get a Docker client instance. """
     try:
-        # Explicitly specify the base_url to use the mounted socket inside the container
-        client = docker.DockerClient(base_url='unix://var/run/docker.sock', timeout=10)
+        # Connect to the Docker-in-Docker sidecar service via TCP
+        client = docker.DockerClient(base_url='tcp://dind-server:2375', timeout=10)
         # Verify connection by pinging the daemon
         client.ping()
-        logger.info("Successfully connected to Docker daemon via unix://var/run/docker.sock")
+        logger.info("Successfully connected to Docker daemon via tcp://dind-server:2375")
         return client
     except DockerException as e:
-        logger.error(f"Failed to initialize Docker client using unix://var/run/docker.sock: {e}")
+        logger.error(f"Failed to initialize Docker client using tcp://dind-server:2375: {e}")
         # Optionally, you could try falling back to docker.from_env() here if needed,
         # but the explicit path is usually required for Docker Desktop mounts.
         raise HTTPException(status_code=fastapi_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Docker connection error: {str(e)}")
