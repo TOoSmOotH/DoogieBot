@@ -78,8 +78,11 @@ COPY frontend/services /app/frontend/services/
 COPY frontend/styles /app/frontend/styles/
 COPY frontend/types /app/frontend/types/
 COPY frontend/utils /app/frontend/utils/
+# Install frontend dependencies
+RUN cd /app/frontend && pnpm install --frozen-lockfile
 
-
+# Build frontend for production
+RUN cd /app/frontend && NODE_ENV=production pnpm run build
 # Build frontend for production
 RUN cd /app/frontend && NODE_ENV=production pnpm run build
 

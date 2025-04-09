@@ -821,7 +821,7 @@ body {
 
 .user-message-markdown,
 .assistant-message-markdown {
-  @apply w-full overflow-wrap-break-word; /* Added overflow-wrap */
+  @apply w-full break-words; /* Added overflow-wrap */
 }
 
 /* Apply styles to markdown elements directly */
