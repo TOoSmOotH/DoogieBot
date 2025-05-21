@@ -8,6 +8,7 @@ from app.llm.openrouter_client import OpenRouterClient
 # Import newly added clients
 from app.llm.anthropic_client import AnthropicClient
 from app.llm.google_gemini_client import GoogleGeminiClient
+from app.llm.github_copilot_client import GitHubCopilotClient
 from app.core.config import settings
 
 # Set up logging
@@ -31,6 +32,7 @@ class LLMFactory:
         "anthropic": AnthropicClient, # Use the actual Anthropic client
         "openrouter": OpenRouterClient,
         "google_gemini": GoogleGeminiClient, # Add Google Gemini client
+        "github_copilot": GitHubCopilotClient,
         # "deepseek": DeepseekClient,
         # "lmstudio": LMStudioClient,
     }
@@ -226,6 +228,8 @@ class LLMFactory:
             return "openai/gpt-3.5-turbo"
         elif provider == "google_gemini":
             return "gemini-pro" # Default for Google Gemini
+        elif provider == "github_copilot":
+            return "openai/gpt-4.1"
         # elif provider == "deepseek":
         #     return "deepseek-chat"
         # elif provider == "lmstudio":
@@ -279,6 +283,14 @@ class LLMFactory:
         providers["google_gemini"] = {
             "available": bool(settings.GOOGLE_GEMINI_API_KEY),
             "default_model": cls._get_default_model("google_gemini"), # Use the method
+            "requires_api_key": True,
+            "requires_base_url": False
+        }
+
+        # Check GitHub Copilot
+        providers["github_copilot"] = {
+            "available": bool(settings.GITHUB_API_TOKEN),
+            "default_model": cls._get_default_model("github_copilot"),
             "requires_api_key": True,
             "requires_base_url": False
         }
